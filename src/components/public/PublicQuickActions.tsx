@@ -21,9 +21,9 @@ import { KRIYAA_KNOWLEDGE_BASE } from '../../data/publicData';
 import { AssistantMessage } from '../../types';
 
 interface PublicQuickActionsProps {
-  onOpenConsultation?: () => void;
-  onOpenCabBooking?: () => void;
-  onNavigateToProjects?: () => void;
+  onOpenConsultation: () => void;
+  onOpenCabBooking: () => void;
+  onNavigateToProjects: () => void;
 }
 
 export const PublicQuickActions: React.FC<PublicQuickActionsProps> = ({
@@ -118,12 +118,12 @@ export const PublicQuickActions: React.FC<PublicQuickActionsProps> = ({
   const handlePromptClick = (prompt: string) => {
     if (prompt === 'Book Free Site Visit' || prompt === 'Book Free Cab' || prompt === 'Book Free Site Visit Cab') {
       setIsBotOpen(false);
-      onOpenCabBooking?.();
+      onOpenCabBooking();
       return;
     }
     if (prompt === 'Show more plots' || prompt === 'Explore Master Plan') {
       setIsBotOpen(false);
-      onNavigateToProjects?.();
+      onNavigateToProjects();
       return;
     }
     if (prompt === 'Talk to Rajesh RTR on WhatsApp' || prompt === 'Contact Rajesh RTR') {
@@ -152,11 +152,7 @@ export const PublicQuickActions: React.FC<PublicQuickActionsProps> = ({
           PERSISTENT FLOATING QUICK ACTION CLUSTER
           Pinned bottom-right, elevated z-index, safe clearance
           ───────────────────────────────────────────────────────────── */}
-      <aside
-        aria-label="Quick Actions"
-        style={{ zIndex: 60 }}
-        className="fixed bottom-20 md:bottom-6 right-3 sm:right-6 z-[60] flex flex-col items-end gap-2.5 pointer-events-auto select-none"
-      >
+      <aside aria-label="Quick Actions" className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 flex flex-col items-end gap-2.5 pointer-events-auto">
         {/* 1. Direct 1-tap WhatsApp Chat to MD Rajesh RTR */}
         <motion.button
           whileHover={{ scale: 1.08 }}
@@ -230,8 +226,7 @@ export const PublicQuickActions: React.FC<PublicQuickActionsProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.96 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            style={{ zIndex: 70 }}
-            className="fixed bottom-22 sm:bottom-24 right-2 sm:right-6 z-[70] w-[calc(100vw-16px)] sm:w-[400px] max-h-[82vh] h-[580px] bg-white dark:bg-[#0B2516] border-2 border-[#1E5D32] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-slate-900 dark:text-slate-100"
+            className="fixed bottom-24 sm:bottom-24 right-3 sm:right-6 z-50 w-[calc(100vw-24px)] sm:w-[400px] max-h-[82vh] h-[580px] bg-white dark:bg-[#0B2516] border-2 border-[#1E5D32] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-slate-900 dark:text-slate-100"
           >
             {/* Header: Deep Forest Green (#113B24) */}
             <div className="bg-[#113B24] p-4 text-white flex items-center justify-between border-b border-[#1E5D32] shrink-0">

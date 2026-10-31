@@ -3,7 +3,6 @@ import { useApp } from '../../context/AppContext';
 import { PublicTab, Property } from '../../types';
 import { PublicHeader } from '../../components/public/PublicHeader';
 import { PublicBottomNav } from '../../components/public/PublicBottomNav';
-import { PublicQuickActions } from '../../components/public/PublicQuickActions';
 import { PublicHome } from './PublicHome';
 import { PublicProjects } from './PublicProjects';
 import { PublicSaved } from './PublicSaved';
@@ -99,15 +98,6 @@ export const PublicWebsite: React.FC = () => {
           />
         )}
       </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          3. PERSISTENT QUICK ACTIONS & BOT CLUSTER
-          ───────────────────────────────────────────────────────────── */}
-      <PublicQuickActions
-        onOpenConsultation={() => openConsultation()}
-        onOpenCabBooking={() => openCabBooking()}
-        onNavigateToProjects={() => setPublicTab('projects')}
-      />
 
       {/* ─────────────────────────────────────────────────────────────
           4. STICKY BOTTOM NAV (<768px Mobile Devices)
