@@ -15,6 +15,7 @@ import {
 import { useApp, NavigationTab } from '../context/AppContext';
 import { TopHeaderBar } from './TopHeaderBar';
 import { KriyaaLogo } from './KriyaaLogo';
+import { PublicQuickActions } from './public/PublicQuickActions';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const {
@@ -190,6 +191,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           );
         })}
       </nav>
+
+      {/* Persistent WhatsApp, Phone & Chatbot Floating Action Cluster */}
+      <PublicQuickActions onNavigateToProjects={() => setActiveTab('projects')} />
 
       {/* Toast Notification Stack */}
       <aside aria-label="Notifications" className="fixed top-4 right-4 z-50 space-y-2 pointer-events-none">
