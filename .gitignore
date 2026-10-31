@@ -19,8 +19,9 @@ dist-ssr
 .env.local
 .env.*.local
 
-# Database local storage
-data/
+# Database local storage (only root data folder, NOT src/data)
+/data/
+!src/data/
 
 # Editor / OS
 .vscode/*
