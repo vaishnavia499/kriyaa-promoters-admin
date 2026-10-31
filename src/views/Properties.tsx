@@ -318,7 +318,7 @@ export const Properties: React.FC = () => {
           className="min-h-[44px] px-5 py-2.5 bg-gradient-to-r from-[#15803D] via-[#166534] to-[#113B24] hover:brightness-110 active:scale-[0.98] text-white text-xs sm:text-sm font-black rounded-xl flex items-center justify-center gap-2 shadow-md border border-[#EAB308]/40 transition-all cursor-pointer whitespace-nowrap"
         >
           <Plus className="w-4 h-4 text-[#EAB308]" />
-          <span>+ Register New Project</span>
+          <span>Register New Project</span>
         </button>
       </div>
 

@@ -7,7 +7,6 @@ import {
   Sun,
   Moon,
   Plus,
-  Building2,
   Users,
   Layers,
   Check,
@@ -181,23 +180,6 @@ export const TopHeaderBar: React.FC = () => {
                   <div className="px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
                     Quick Actions
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsActionMenuOpen(false);
-                      openAddPropertyModal();
-                    }}
-                    className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer text-slate-800 dark:text-slate-100"
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-[#15803D] dark:text-emerald-400 flex items-center justify-center shrink-0">
-                      <Building2 className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-bold">Add Property / Plot</p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">Add plot with dimensions & price</p>
-                    </div>
-                  </button>
 
                   <button
                     type="button"

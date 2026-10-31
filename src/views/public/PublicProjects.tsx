@@ -1028,7 +1028,7 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
           {/* Filter Rows: Location Pills & Status Pills (Mobile-first with horizontal scroll & 44px tap targets) */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
             {/* Location Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 no-scrollbar touch-pan-x">
+            <div className="w-full md:w-auto flex items-center gap-1.5 overflow-x-auto pb-2 md:pb-0 no-scrollbar touch-pan-x">
               <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 mr-1 hidden sm:inline">
                 Location:
               </span>
@@ -1039,7 +1039,7 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                     key={loc}
                     type="button"
                     onClick={() => setProjectLocationFilter(loc)}
-                    className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border active:scale-95 ${
+                    className={`min-h-[38px] sm:min-h-[44px] px-2.5 sm:px-4 py-1.5 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border active:scale-95 ${
                       isActive
                         ? 'bg-[#113B24] dark:bg-[#15803D] text-[#EAB308] dark:text-white border-[#EAB308]/60 dark:border-emerald-500 shadow-sm'
                         : 'bg-white dark:bg-[#0B2516] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-[#1E5D32] hover:bg-slate-50 dark:hover:bg-[#133A23]'
@@ -1052,7 +1052,7 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
             </div>
 
             {/* Status Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 no-scrollbar touch-pan-x">
+            <div className="w-full md:w-auto flex items-center gap-1.5 overflow-x-auto pb-2 md:pb-0 no-scrollbar touch-pan-x">
               <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 mr-1 hidden sm:inline">
                 Status:
               </span>
@@ -1063,7 +1063,7 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                     key={st}
                     type="button"
                     onClick={() => setProjectStatusFilter(st)}
-                    className={`min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border active:scale-95 ${
+                    className={`min-h-[38px] sm:min-h-[44px] px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border active:scale-95 ${
                       isActive
                         ? 'bg-[#EAB308] text-slate-950 border-[#CA8A04] shadow-sm font-black'
                         : 'bg-white dark:bg-[#0B2516] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-[#1E5D32] hover:bg-slate-50 dark:hover:bg-[#133A23]'

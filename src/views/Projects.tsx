@@ -878,10 +878,10 @@ export const Projects: React.FC = () => {
               </div>
 
               {/* ─────────────────────────────────────────────────────────
-                  INLINE PLOT QUICK ACTION & PRICE BREAKDOWN PANEL
+                  INLINE PLOT QUICK ACTION & PRICE BREAKDOWN PANEL (Floating & Sticky)
                   ───────────────────────────────────────────────────────── */}
               {activePlotForQuickAction && (
-                <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl border-2 border-emerald-500 shadow-md space-y-4 animate-in fade-in duration-200">
+                <div className="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-6 sm:max-w-xl z-50 p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-3xl border-2 border-[#15803D] shadow-2xl space-y-3.5 animate-in slide-in-from-bottom duration-200 ring-4 ring-black/15">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-white text-xs font-bold uppercase tracking-wider">
@@ -1063,13 +1063,13 @@ export const Projects: React.FC = () => {
           </div>
 
           {/* Location Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 flex-nowrap no-scrollbar text-xs">
+          <div className="w-full sm:w-auto flex items-center gap-1.5 overflow-x-auto pb-2 sm:pb-0 flex-nowrap no-scrollbar touch-pan-x text-xs">
             {['All Locations', 'Cuddalore', 'Chidambaram', 'Pondy / ECR'].map((loc) => (
               <button
                 key={loc}
                 type="button"
                 onClick={() => setSelectedLocation(loc)}
-                className={`min-h-[44px] px-3.5 font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border ${
+                className={`min-h-[38px] sm:min-h-[44px] px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border active:scale-95 ${
                   selectedLocation === loc
                     ? 'bg-[#15803D] text-white border-emerald-600 shadow-xs'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -1081,13 +1081,13 @@ export const Projects: React.FC = () => {
           </div>
 
           {/* Status Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 flex-nowrap no-scrollbar text-xs">
+          <div className="w-full sm:w-auto flex items-center gap-1.5 overflow-x-auto pb-2 sm:pb-0 flex-nowrap no-scrollbar touch-pan-x text-xs">
             {['All', 'Active', 'Upcoming', 'Completed'].map((st) => (
               <button
                 key={st}
                 type="button"
                 onClick={() => setSelectedStatus(st)}
-                className={`min-h-[44px] px-3.5 font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border ${
+                className={`min-h-[38px] sm:min-h-[44px] px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border active:scale-95 ${
                   selectedStatus === st
                     ? 'bg-[#EAB308] text-slate-950 border-[#CA8A04] shadow-xs font-black'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'

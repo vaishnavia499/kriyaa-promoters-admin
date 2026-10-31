@@ -10,6 +10,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import { Property, Project } from '../../types';
+import { useApp } from '../../context/AppContext';
 
 interface PlotDetailsModalProps {
   isOpen: boolean;
@@ -32,6 +33,9 @@ export const PlotDetailsModal: React.FC<PlotDetailsModalProps> = ({
   onBookConsultation,
   onWhatsAppInquiry,
 }) => {
+  const { isAuthenticated, currentMode, updatePropertyStatus, showToast } = useApp();
+  const isAdmin = isAuthenticated || currentMode === 'admin';
+
   // ─────────────────────────────────────────────────────────────────
   // Accessibility: 'Esc' key to dismiss & Background scroll lock
   // ─────────────────────────────────────────────────────────────────
@@ -154,6 +158,44 @@ export const PlotDetailsModal: React.FC<PlotDetailsModalProps> = ({
                 <X className="w-5 h-5 stroke-[2.5]" />
               </button>
             </div>
+
+            {/* Admin Quick Status Control (Available / Reserved / Sold) */}
+            {isAdmin && plot && (
+              <div className="p-3.5 rounded-2xl bg-slate-900 border-2 border-emerald-500 text-white space-y-2 shadow-lg">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Admin Status Control
+                  </span>
+                  <span className="text-[11px] text-slate-300 font-mono">
+                    Current: <strong className="text-white uppercase">{plot.status}</strong>
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Available', 'Reserved', 'Sold'] as const).map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => {
+                        updatePropertyStatus(plot.id, st);
+                        showToast(`Plot #${plot.plotNumber} updated to ${st}`, 'success');
+                      }}
+                      className={`py-2 px-1 rounded-xl text-xs font-black transition-all cursor-pointer border active:scale-95 ${
+                        plot.status === st
+                          ? st === 'Available'
+                            ? 'bg-[#15803D] text-white border-emerald-400 shadow-md ring-2 ring-emerald-400/50'
+                            : st === 'Reserved'
+                            ? 'bg-[#CA8A04] text-white border-amber-400 shadow-md ring-2 ring-amber-400/50'
+                            : 'bg-rose-600 text-white border-rose-400 shadow-md ring-2 ring-rose-400/50'
+                          : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
+                      }`}
+                    >
+                      {st === 'Available' ? '✓ Available' : st === 'Reserved' ? '⏱ Reserved' : '✕ Sold'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ─────────────────────────────────────────────────────────────
                 2. PLOT SPECIFICATIONS GRID (Clean 2x2 & Highlight Rows)
