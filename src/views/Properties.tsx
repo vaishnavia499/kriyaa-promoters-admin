@@ -297,9 +297,9 @@ export const Properties: React.FC = () => {
       {/* ─────────────────────────────────────────────────────────────
           1. HEADER & REGISTER NEW PROJECT CTA
           ───────────────────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="text-center sm:text-left">
+          <div className="flex items-center justify-center sm:justify-start gap-2">
             <span className="p-2 rounded-xl bg-[#15803D]/10 text-[#15803D] dark:text-emerald-400">
               <Building2 className="w-5 h-5" />
             </span>
@@ -312,17 +312,15 @@ export const Properties: React.FC = () => {
           </p>
         </div>
 
-        {/* Action: Register New Plot CTA (Centered in its header place) */}
-        <div className="w-full md:w-auto flex items-center justify-center md:justify-end">
-          <button
-            type="button"
-            onClick={() => openAddPropertyModal(filterProjectId !== 'all' ? filterProjectId : undefined)}
-            className="min-h-[44px] px-6 py-2.5 bg-gradient-to-r from-[#15803D] via-[#166534] to-[#113B24] hover:brightness-110 active:scale-[0.98] text-white text-xs sm:text-sm font-black rounded-xl flex items-center justify-center gap-2 shadow-md border border-[#EAB308]/40 transition-all cursor-pointer whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4 text-[#EAB308]" />
-            <span>Register New Plot</span>
-          </button>
-        </div>
+        {/* Register New Plot Button (Centered similar to Project) */}
+        <button
+          type="button"
+          onClick={() => openAddPropertyModal(filterProjectId !== 'all' ? filterProjectId : undefined)}
+          className="min-h-[42px] px-4 py-2 bg-[#15803D] hover:bg-[#166534] active:scale-[0.98] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm border border-[#CA8A04]/40 hover:border-[#EAB308] transition-all cursor-pointer shrink-0 whitespace-nowrap self-center sm:self-auto"
+        >
+          <Plus className="w-4 h-4 text-[#EAB308]" />
+          <span>Register New Plot</span>
+        </button>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -483,6 +481,16 @@ export const Properties: React.FC = () => {
                 className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 dark:bg-[#112F1C] border border-slate-200 dark:border-[#1E5D32] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
+
+            {/* Quick Register Plot Button */}
+            <button
+              type="button"
+              onClick={() => openAddPropertyModal(filterProjectId !== 'all' ? filterProjectId : undefined)}
+              className="min-h-[38px] px-3.5 py-1.5 bg-[#15803D] hover:bg-[#166534] active:scale-[0.98] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-xs border border-[#CA8A04]/40 hover:border-[#EAB308] transition-all cursor-pointer shrink-0 whitespace-nowrap self-stretch sm:self-auto"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#EAB308]" />
+              <span>Register Plot</span>
+            </button>
           </div>
         </div>
 

@@ -24,6 +24,7 @@ import {
   Box,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Camera,
   FileText,
   Download,
@@ -91,6 +92,24 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
 
   // Master Layout Display Mode (topdown | blueprint | isometric | satellite)
   const [displayMode, setDisplayMode] = useState<LayoutDisplayMode>('topdown');
+
+  // Listen for browser Back button on laptop & mobile to exit full screen project or close plot modal
+  React.useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (isPlotModalOpen) {
+        setIsPlotModalOpen(false);
+        e.stopImmediatePropagation?.();
+        return;
+      }
+      if (activeProjectId) {
+        setActiveProjectId(null);
+        e.stopImmediatePropagation?.();
+        return;
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isPlotModalOpen, activeProjectId]);
 
   // Currently inspected plot in the project view
   const [inspectedPlotId, setInspectedPlotId] = useState<string | null>(null);
@@ -780,6 +799,7 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                 selectedPlot={inspectedPlot}
                 onSelectPlot={(p) => {
                   setInspectedPlotId(p.id);
+                  try { window.history.pushState({ modal: 'plot' }, ''); } catch {}
                   setIsPlotModalOpen(true);
                 }}
                 displayMode={displayMode}
@@ -1025,54 +1045,38 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
             )}
           </div>
 
-          {/* Filter Rows: Location Pills & Status Pills (Mobile-first with horizontal scroll & 44px tap targets) */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
-            {/* Location Filter Pills */}
-            <div className="w-full md:w-auto flex items-center gap-1.5 overflow-x-auto pb-2 md:pb-0 no-scrollbar touch-pan-x">
-              <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 mr-1 hidden sm:inline">
-                Location:
-              </span>
-              {['All Locations', 'Cuddalore', 'Chidambaram', 'Pondy / ECR'].map((loc) => {
-                const isActive = projectLocationFilter === loc;
-                return (
-                  <button
-                    key={loc}
-                    type="button"
-                    onClick={() => setProjectLocationFilter(loc)}
-                    className={`min-h-[38px] sm:min-h-[44px] px-2.5 sm:px-4 py-1.5 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border active:scale-95 ${
-                      isActive
-                        ? 'bg-[#113B24] dark:bg-[#15803D] text-[#EAB308] dark:text-white border-[#EAB308]/60 dark:border-emerald-500 shadow-sm'
-                        : 'bg-white dark:bg-[#0B2516] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-[#1E5D32] hover:bg-slate-50 dark:hover:bg-[#133A23]'
-                    }`}
-                  >
-                    <span>{loc}</span>
-                  </button>
-                );
-              })}
+          {/* Dropdown Filters in the Same Row */}
+          <div className="flex items-center gap-2.5 w-full md:w-auto pt-1">
+            {/* Location Dropdown */}
+            <div className="relative flex-1 sm:w-48">
+              <MapPin className="w-3.5 h-3.5 text-[#15803D] dark:text-[#EAB308] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <select
+                value={projectLocationFilter}
+                onChange={(e) => setProjectLocationFilter(e.target.value)}
+                className="w-full min-h-[44px] pl-8 pr-8 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-white dark:bg-[#0B2516] text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#15803D] appearance-none cursor-pointer shadow-xs"
+              >
+                <option value="All Locations">All Locations</option>
+                <option value="Cuddalore">Cuddalore</option>
+                <option value="Chidambaram">Chidambaram</option>
+                <option value="Pondy / ECR">Pondy / ECR</option>
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
-            {/* Status Filter Pills */}
-            <div className="w-full md:w-auto flex items-center gap-1.5 overflow-x-auto pb-2 md:pb-0 no-scrollbar touch-pan-x">
-              <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 mr-1 hidden sm:inline">
-                Status:
-              </span>
-              {['All', 'Active', 'Upcoming', 'Completed'].map((st) => {
-                const isActive = projectStatusFilter === st;
-                return (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => setProjectStatusFilter(st)}
-                    className={`min-h-[38px] sm:min-h-[44px] px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border active:scale-95 ${
-                      isActive
-                        ? 'bg-[#EAB308] text-slate-950 border-[#CA8A04] shadow-sm font-black'
-                        : 'bg-white dark:bg-[#0B2516] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-[#1E5D32] hover:bg-slate-50 dark:hover:bg-[#133A23]'
-                    }`}
-                  >
-                    <span>{st}</span>
-                  </button>
-                );
-              })}
+            {/* Status Dropdown */}
+            <div className="relative flex-1 sm:w-44">
+              <Filter className="w-3.5 h-3.5 text-[#CA8A04] dark:text-[#EAB308] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <select
+                value={projectStatusFilter}
+                onChange={(e) => setProjectStatusFilter(e.target.value)}
+                className="w-full min-h-[44px] pl-8 pr-8 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-white dark:bg-[#0B2516] text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#15803D] appearance-none cursor-pointer shadow-xs"
+              >
+                <option value="All">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Upcoming">Upcoming</option>
+                <option value="Completed">Completed</option>
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
           </div>
         </div>
@@ -1200,6 +1204,7 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                   <button
                     type="button"
                     onClick={() => {
+                      try { window.history.pushState({ subView: 'project-detail', id: project.id }, ''); } catch {}
                       setActiveProjectId(project.id);
                       setProjectSubTab('details');
                       window.scrollTo({ top: 0, behavior: 'smooth' });

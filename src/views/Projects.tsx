@@ -20,6 +20,8 @@ import {
   Layers,
   ArrowRight,
   Maximize2,
+  ChevronDown,
+  Filter,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Project, Property, PropertyStatus } from '../types';
@@ -59,6 +61,24 @@ export const Projects: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<string>('All Locations');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
+
+  // Listen for browser Back button on laptop & mobile to exit admin project layout or close quick action panel
+  React.useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (activePlotForQuickAction) {
+        setActivePlotForQuickAction(null);
+        e.stopImmediatePropagation?.();
+        return;
+      }
+      if (selectedProjectId) {
+        setSelectedProjectId(null);
+        e.stopImmediatePropagation?.();
+        return;
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activePlotForQuickAction, selectedProjectId]);
 
   // Filter projects by search query, location, and status for the catalog view
   const filteredProjects = useMemo(() => {
@@ -1062,40 +1082,39 @@ export const Projects: React.FC = () => {
             />
           </div>
 
-          {/* Location Filter Pills */}
-          <div className="w-full sm:w-auto flex items-center gap-1.5 overflow-x-auto pb-2 sm:pb-0 flex-nowrap no-scrollbar touch-pan-x text-xs">
-            {['All Locations', 'Cuddalore', 'Chidambaram', 'Pondy / ECR'].map((loc) => (
-              <button
-                key={loc}
-                type="button"
-                onClick={() => setSelectedLocation(loc)}
-                className={`min-h-[38px] sm:min-h-[44px] px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border active:scale-95 ${
-                  selectedLocation === loc
-                    ? 'bg-[#15803D] text-white border-emerald-600 shadow-xs'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+          {/* Dropdown Filters in the Same Row */}
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            {/* Location Dropdown */}
+            <div className="relative flex-1 sm:w-44">
+              <MapPin className="w-3.5 h-3.5 text-[#15803D] dark:text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="w-full min-h-[44px] pl-8 pr-8 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#15803D] appearance-none cursor-pointer"
               >
-                {loc}
-              </button>
-            ))}
-          </div>
+                <option value="All Locations">All Locations</option>
+                <option value="Cuddalore">Cuddalore</option>
+                <option value="Chidambaram">Chidambaram</option>
+                <option value="Pondy / ECR">Pondy / ECR</option>
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
 
-          {/* Status Filter Pills */}
-          <div className="w-full sm:w-auto flex items-center gap-1.5 overflow-x-auto pb-2 sm:pb-0 flex-nowrap no-scrollbar touch-pan-x text-xs">
-            {['All', 'Active', 'Upcoming', 'Completed'].map((st) => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => setSelectedStatus(st)}
-                className={`min-h-[38px] sm:min-h-[44px] px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center border active:scale-95 ${
-                  selectedStatus === st
-                    ? 'bg-[#EAB308] text-slate-950 border-[#CA8A04] shadow-xs font-black'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+            {/* Status Dropdown */}
+            <div className="relative flex-1 sm:w-40">
+              <Filter className="w-3.5 h-3.5 text-[#CA8A04] dark:text-[#EAB308] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="w-full min-h-[44px] pl-8 pr-8 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#15803D] appearance-none cursor-pointer"
               >
-                {st}
-              </button>
-            ))}
+                <option value="All">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Upcoming">Upcoming</option>
+                <option value="Completed">Completed</option>
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
         </div>
 
@@ -1244,6 +1263,7 @@ export const Projects: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
+                      try { window.history.pushState({ subView: 'admin-project', id: proj.id }, ''); } catch {}
                       setSelectedProjectId(proj.id);
                       setDetailActiveMode('overview');
                     }}
@@ -1257,6 +1277,7 @@ export const Projects: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
+                      try { window.history.pushState({ subView: 'admin-project', id: proj.id }, ''); } catch {}
                       setSelectedProjectId(proj.id);
                       setDetailActiveMode('grid');
                     }}

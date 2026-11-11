@@ -29,14 +29,31 @@ export const PublicWebsite: React.FC = () => {
   const [prefillPlot, setPrefillPlot] = useState<Property | null>(null);
   const [prefillPlotNumbers, setPrefillPlotNumbers] = useState<string | undefined>(undefined);
 
+  // Close modals on browser Back button (Laptop & Mobile)
+  React.useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (isConsultationOpen || isCabBookingOpen || isDroneVideoOpen || isAdminLoginOpen) {
+        setIsConsultationOpen(false);
+        setIsCabBookingOpen(false);
+        setIsDroneVideoOpen(false);
+        setIsAdminLoginOpen(false);
+        e.stopImmediatePropagation?.();
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isConsultationOpen, isCabBookingOpen, isDroneVideoOpen, isAdminLoginOpen]);
+
   const openConsultation = (plot?: Property) => {
     setPrefillPlot(plot || null);
+    try { window.history.pushState({ modal: 'consultation' }, ''); } catch {}
     setIsConsultationOpen(true);
   };
 
   const openCabBooking = (plot?: Property, plotNumbersStr?: string) => {
     setPrefillPlot(plot || null);
     setPrefillPlotNumbers(plotNumbersStr);
+    try { window.history.pushState({ modal: 'cab-booking' }, ''); } catch {}
     setIsCabBookingOpen(true);
   };
 

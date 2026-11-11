@@ -146,8 +146,42 @@ const STORAGE_KEYS = {
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Public Customer Website vs Authenticated Admin Management Portal
-  const [currentMode, setCurrentMode] = useState<AppMode>('admin');
-  const [publicTab, setPublicTab] = useState<PublicTab>('home');
+  const [currentMode, setCurrentModeState] = useState<AppMode>('admin');
+  const [publicTab, setPublicTabState] = useState<PublicTab>('home');
+  const [activeTab, setActiveTabState] = useState<NavigationTab>('dashboard');
+
+  const setPublicTab = useCallback((tab: PublicTab) => {
+    setPublicTabState((prev) => {
+      if (prev !== tab) {
+        try {
+          window.history.pushState({ scope: 'public', tab }, '', `?tab=${tab}`);
+        } catch {}
+      }
+      return tab;
+    });
+  }, []);
+
+  const setActiveTab = useCallback((tab: NavigationTab) => {
+    setActiveTabState((prev) => {
+      if (prev !== tab) {
+        try {
+          window.history.pushState({ scope: 'admin', tab }, '', `?tab=${tab}`);
+        } catch {}
+      }
+      return tab;
+    });
+  }, []);
+
+  const setCurrentMode = useCallback((mode: AppMode) => {
+    setCurrentModeState((prev) => {
+      if (prev !== mode) {
+        try {
+          window.history.pushState({ scope: mode }, '', mode === 'admin' ? '?mode=admin' : '/');
+        } catch {}
+      }
+      return mode;
+    });
+  }, []);
 
   // Buyer Shortlisted / Saved Plots
   const [savedPlotIds, setSavedPlotIds] = useState<string[]>(() => {
@@ -191,8 +225,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
   });
-
-  const [activeTab, setActiveTab] = useState<NavigationTab>('dashboard');
 
   // Projects State
   const [projects, setProjects] = useState<Project[]>(() => {
@@ -390,6 +422,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3200);
   };
+
+  // Global popstate event listener for browser Back button navigation (Laptop & Mobile)
+  useEffect(() => {
+    try {
+      if (!window.history.state) {
+        window.history.replaceState({ scope: currentMode, tab: currentMode === 'admin' ? activeTab : publicTab }, '');
+      }
+    } catch {}
+
+    const handlePopState = (e: PopStateEvent) => {
+      // 1. If any drawer / modal is open, close it first
+      if (isPropertyDrawerOpen) {
+        setIsPropertyDrawerOpen(false);
+        return;
+      }
+      if (isPropertyModalOpen) {
+        setIsPropertyModalOpen(false);
+        return;
+      }
+      if (isLeadModalOpen) {
+        setIsLeadModalOpen(false);
+        return;
+      }
+      if (isProjectModalOpen) {
+        setIsProjectModalOpen(false);
+        return;
+      }
+      if (newProjectWizardActive) {
+        setNewProjectWizardActive(false);
+        return;
+      }
+      if (plotManagementMode === 'visualize') {
+        setPlotManagementModeState('list');
+        return;
+      }
+      if (isProjectDetailOpen) {
+        setIsProjectDetailOpen(false);
+        return;
+      }
+
+      // 2. Restore state from history if present
+      const state = e.state;
+      if (state) {
+        if (state.scope === 'public') {
+          setCurrentModeState('public');
+          if (state.tab) {
+            setPublicTabState(state.tab);
+          }
+        } else if (state.scope === 'admin') {
+          setCurrentModeState('admin');
+          if (state.tab) {
+            setActiveTabState(state.tab);
+          }
+        }
+      } else {
+        if (currentMode === 'admin') {
+          setCurrentModeState('public');
+        }
+        setPublicTabState('home');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [
+    currentMode,
+    activeTab,
+    publicTab,
+    isPropertyDrawerOpen,
+    isPropertyModalOpen,
+    isLeadModalOpen,
+    isProjectModalOpen,
+    newProjectWizardActive,
+    plotManagementMode,
+    isProjectDetailOpen,
+  ]);
 
   // Backend Communication State
   const [isLoadingBackend, setIsLoadingBackend] = useState<boolean>(false);

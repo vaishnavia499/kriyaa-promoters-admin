@@ -13,11 +13,21 @@ import {
 import { useApp } from '../context/AppContext';
 
 export const Login: React.FC = () => {
-  const { login, settings } = useApp();
+  const { login, settings, setCurrentMode, setPublicTab } = useApp();
   const [email, setEmail] = useState('rajesh@kriyaapromoters.com');
   const [password, setPassword] = useState('••••••••');
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Navigate to public website on browser Back button (Laptop & Mobile)
+  React.useEffect(() => {
+    const handlePopState = () => {
+      setCurrentMode('public');
+      setPublicTab('home');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [setCurrentMode, setPublicTab]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,6 +178,17 @@ export const Login: React.FC = () => {
                 KP
               </div>
               <span>Sign in as Rajesh RTR (Super Admin)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentMode('public');
+                setPublicTab('home');
+              }}
+              className="w-full py-2 text-center text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+            >
+              ← Return to Customer Website
             </button>
           </div>
         </div>
