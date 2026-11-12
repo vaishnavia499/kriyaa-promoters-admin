@@ -320,7 +320,7 @@ export const TopHeaderBar: React.FC = () => {
           >
             <MapPin className="w-3.5 h-3.5 text-[#22C55E] shrink-0 stroke-[2.2]" />
             <span className="truncate max-w-[130px] sm:max-w-[220px]">
-              {selectedProject?.name || 'Golden City'}
+              {selectedProjectId === 'all' ? 'All Projects' : (selectedProject?.name || 'Golden City')}
             </span>
             <ChevronDown
               className={`w-3.5 h-3.5 text-[#EAB308] shrink-0 transition-transform duration-150 ${

@@ -3,7 +3,12 @@ import confetti from 'canvas-confetti';
 import { Property, Lead, BusinessSettings, PropertyStatus, LeadStatus, Project, NavigationTab, PublicTab, AppMode } from '../types';
 import { INITIAL_PROPERTIES, INITIAL_LEADS, INITIAL_SETTINGS, INITIAL_PROJECTS } from '../data/initialData';
 import * as api from '../services/apiClient';
-import { submitSupabaseLead, updatePropertyStatusInSupabase } from '../services/supabaseDataService';
+import {
+  submitSupabaseLead,
+  updatePropertyStatusInSupabase,
+  getSupabaseProjects,
+  getSupabaseAllPlots,
+} from '../services/supabaseDataService';
 import { supabase } from '../lib/supabase';
 
 export type { NavigationTab, PublicTab, AppMode };
@@ -508,13 +513,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBackendError(null);
     try {
       if (currentMode === 'admin' && isAuthenticated) {
-        const adminProjs = await api.fetchAdminProjects();
+        let adminProjs: Project[] = [];
+        try {
+          adminProjs = await api.fetchAdminProjects();
+        } catch {
+          adminProjs = await getSupabaseProjects();
+        }
         if (adminProjs && adminProjs.length > 0) {
           setProjects(adminProjs);
-          const targetProjId = selectedProjectId !== 'all' ? selectedProjectId : adminProjs[0]?.id;
-          if (targetProjId) {
-            const adminPlots = await api.fetchAdminProjectPlots(targetProjId);
-            setProperties(adminPlots);
+          let allPlots: Property[] = [];
+          try {
+            const perProjectPlots = await Promise.all(
+              adminProjs.map((proj) => api.fetchAdminProjectPlots(proj.id))
+            );
+            allPlots = perProjectPlots.flat();
+          } catch {
+            allPlots = await getSupabaseAllPlots();
+          }
+          if (allPlots.length > 0) {
+            setProperties(allPlots);
           }
         }
       } else {
@@ -522,10 +539,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const publicProjs = await api.fetchPublishedProjects();
         if (publicProjs && publicProjs.length > 0) {
           setProjects(publicProjs);
-          const targetProjId = selectedProjectId !== 'all' ? selectedProjectId : publicProjs[0]?.id;
-          if (targetProjId) {
-            const { plots } = await api.fetchPublishedProjectPlots(targetProjId);
-            setProperties(plots);
+          const allPlots = await getSupabaseAllPlots();
+          if (allPlots.length > 0) {
+            setProperties(allPlots);
           }
         }
       }
@@ -535,7 +551,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } finally {
       setIsLoadingBackend(false);
     }
-  }, [currentMode, isAuthenticated, selectedProjectId]);
+  }, [currentMode, isAuthenticated]);
 
   useEffect(() => {
     refreshBackendData();

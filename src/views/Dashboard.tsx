@@ -11,7 +11,7 @@ import {
   ArrowUpRight,
   TrendingUp,
   MapPin,
-  ShieldCheck,
+  Calendar,
   FileText,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -20,16 +20,27 @@ import { Lead, LeadStatus, LeadPreferredAction } from '../types';
 export const Dashboard: React.FC = () => {
   const {
     stats,
+    projects,
+    properties,
+    leads,
     filteredLeads,
-    filteredProperties,
     selectedProject,
     selectedProjectId,
     setSelectedProjectId,
     settings,
     openAddPropertyModal,
     openLeadDrawer,
-    openPropertyDrawer,
   } = useApp();
+
+  const formatShortDate = (iso?: string, fallbackYear?: number) => {
+    if (iso) {
+      const d = new Date(iso);
+      if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+    }
+    return fallbackYear ? `Launch ${fallbackYear}` : '—';
+  };
 
   const recentLeads = filteredLeads.slice(0, 5);
 
@@ -72,57 +83,7 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="space-y-5">
       {/* ─────────────────────────────────────────────────────────────
-          1. LARGE HERO CARD (RICH FOREST GRADIENT)
-          ───────────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-b from-[#1E4D2B] to-[#122D1A] rounded-3xl p-5 sm:p-6 border border-[#1E5D32] shadow-sm relative overflow-hidden text-white flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          {/* Inner Top: Gold-tinted shield label */}
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#EAB308] flex-wrap">
-            <ShieldCheck className="w-4 h-4 text-[#EAB308]" />
-            <span className="uppercase tracking-wider font-black">
-              {settings.companyName || 'KRIYAA PROMOTERS'} • DTCP Layouts
-            </span>
-          </div>
-
-          {/* Main Title: Bold, crisp white text */}
-          <h2 className="text-xl md:text-2xl font-black text-white mt-1.5">
-            {selectedProject ? selectedProject.name : 'All Projects & Layouts'}
-          </h2>
-
-          {/* Body: Subtitle and "Managed by Rajesh RTR." highlight in metallic yellow-gold */}
-          <p className="text-xs md:text-sm text-slate-200 mt-1 max-w-xl leading-relaxed">
-            {selectedProject
-              ? `${selectedProject.description} Located in ${selectedProject.location}, ${selectedProject.district}. `
-              : `Promotions, Residential & Commercial layouts across ${settings.locationsServed}. `}
-            <span className="text-[#EAB308] font-semibold underline">
-              Managed by {settings.ownerName || 'Rajesh RTR'}.
-            </span>
-          </p>
-        </div>
-
-        {/* Dark Badge Pods: Dual background pills at the bottom with a subtle orange alert/active indicator */}
-        <div className="flex items-center gap-2.5 shrink-0 pt-2 md:pt-0">
-          <div className="relative px-3.5 py-2 bg-[#0B2516]/90 border border-[#1E5D32] rounded-2xl text-xs shadow-xs">
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#EAB308] ring-2 ring-[#0B2516]" />
-            <span className="text-[#76B084] block text-[10px] uppercase font-bold tracking-wider">
-              DTCP APPROVAL
-            </span>
-            <span className="font-bold text-[#EAB308]">
-              {selectedProject ? selectedProject.dtcpNumber : (settings.dtcpNumber || 'DTCP No. 182/2023')}
-            </span>
-          </div>
-
-          <div className="px-3.5 py-2 bg-[#0B2516]/90 border border-[#1E5D32] rounded-2xl text-xs shadow-xs">
-            <span className="text-[#76B084] block text-[10px] uppercase font-bold tracking-wider">
-              TOTAL INVENTORY
-            </span>
-            <span className="font-bold text-white">₹{stats.totalValueLakhs} Lakhs</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          2. UNIFORM METRIC CARDS (Simple, Clean, Same Base Color)
+          1. UNIFORM METRIC CARDS (Simple, Clean, Same Base Color)
           ───────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
         {/* Total Units */}
@@ -205,6 +166,105 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ─────────────────────────────────────────────────────────────
+          CONSOLIDATED ALL-PROJECTS DATA & COUNT DETAILS (When 'all' selected)
+          ───────────────────────────────────────────────────────────── */}
+      {selectedProjectId === 'all' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+          <div className="px-4 py-3.5 sm:px-5 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50/70 dark:bg-slate-800/40">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-[#15803D]" />
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                All Projects — Consolidated Summary
+              </h3>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap text-[11px] font-bold">
+              <span className="px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-[#15803D] dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                {projects.length} Layouts
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 text-[#CA8A04] dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                ₹{stats.totalValueLakhs} Lakhs Total Value
+              </span>
+            </div>
+          </div>
+
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {projects.map((proj) => {
+              const projProps = properties.filter((p) => p.projectId === proj.id);
+              const totalCount = projProps.length;
+              const availCount = projProps.filter((p) => p.status === 'Available').length;
+              const reservedCount = projProps.filter((p) => p.status === 'Reserved').length;
+              const soldCount = projProps.filter((p) => p.status === 'Sold').length;
+              const projLeadsCount = leads.filter(
+                (l) =>
+                  l.projectId === proj.id ||
+                  l.propertyOfInterest.toLowerCase().includes(proj.name.toLowerCase())
+              ).length;
+              const projValueLakhs = Math.round(
+                projProps.reduce((acc, p) => acc + p.totalPrice, 0) / 100000
+              );
+
+              return (
+                <button
+                  key={proj.id}
+                  type="button"
+                  onClick={() => setSelectedProjectId(proj.id)}
+                  className="w-full px-4 py-3.5 sm:px-5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-left flex flex-col lg:flex-row lg:items-center justify-between gap-3 cursor-pointer"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">
+                        {proj.name}
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {proj.dtcpNumber}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-[#15803D]" />
+                        {proj.location}, {proj.district}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        Updated {formatShortDate(proj.updatedAt || proj.createdAt, proj.launchYear)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center shrink-0">
+                    <div className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/70">
+                      <span className="block text-[10px] font-semibold text-slate-400 uppercase">Plots</span>
+                      <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">{totalCount}</span>
+                    </div>
+                    <div className="px-2.5 py-1.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40">
+                      <span className="block text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase">Avail</span>
+                      <span className="text-xs font-black text-[#15803D] dark:text-emerald-300 tabular-nums">{availCount}</span>
+                    </div>
+                    <div className="px-2.5 py-1.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/40">
+                      <span className="block text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase">Resv</span>
+                      <span className="text-xs font-black text-[#CA8A04] dark:text-amber-300 tabular-nums">{reservedCount}</span>
+                    </div>
+                    <div className="px-2.5 py-1.5 rounded-xl bg-red-50/70 dark:bg-red-950/40">
+                      <span className="block text-[10px] font-semibold text-red-600 dark:text-red-400 uppercase">Sold</span>
+                      <span className="text-xs font-black text-[#991B1B] dark:text-red-300 tabular-nums">{soldCount}</span>
+                    </div>
+                    <div className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/70">
+                      <span className="block text-[10px] font-semibold text-slate-400 uppercase">Leads</span>
+                      <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">{projLeadsCount}</span>
+                    </div>
+                    <div className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/70">
+                      <span className="block text-[10px] font-semibold text-slate-400 uppercase">Value</span>
+                      <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">₹{projValueLakhs}L</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────
           3. QUICK ACTIONS BANNERS (BRAND FOREST GREEN)
@@ -292,6 +352,12 @@ export const Dashboard: React.FC = () => {
                   )}
                   <span>•</span>
                   <span className="text-[11px] text-slate-400">{lead.phone}</span>
+                  {lead.timestamp && (
+                    <>
+                      <span>•</span>
+                      <span className="text-[11px] text-slate-400">{formatShortDate(lead.timestamp)}</span>
+                    </>
+                  )}
                 </div>
               </div>
 

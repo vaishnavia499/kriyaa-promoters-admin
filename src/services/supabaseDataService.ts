@@ -143,6 +143,32 @@ export async function getSupabaseProjectPlots(projectId: string): Promise<Proper
 }
 
 /**
+ * Fetch all plots/properties across all projects from Supabase
+ */
+export async function getSupabaseAllPlots(): Promise<Property[]> {
+  try {
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .order('plot_number', { ascending: true });
+
+    if (error) {
+      console.warn('[SupabaseService] Error loading all plots:', error.message);
+      return INITIAL_PROPERTIES;
+    }
+
+    if (!data || data.length === 0) {
+      return INITIAL_PROPERTIES;
+    }
+
+    return data.map((row) => mapPropertyRow(row));
+  } catch (err: any) {
+    console.warn('[SupabaseService] Fallback to initial all plots:', err?.message);
+    return INITIAL_PROPERTIES;
+  }
+}
+
+/**
  * Save plot boundaries to Supabase and return updated count
  */
 export async function savePlotBoundariesToSupabase(
