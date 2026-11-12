@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard,
   Building2,
-  Users,
   Settings,
   CheckCircle2,
   Info,
@@ -31,7 +30,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     { id: 'projects', label: 'Projects', icon: MapPin },
     { id: 'properties', label: 'Properties', icon: Building2 },
     { id: 'hotspot-simulator', label: 'Plot Management', icon: Sparkles },
-    { id: 'leads', label: 'Leads', icon: Users },
   ];
 
   return (
@@ -149,11 +147,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       {/* ─────────────────────────────────────────────────────────────
           3. MOBILE BOTTOM NAVIGATION (< 768px, Fixed Bottom)
-          Equally divided into 5 equal parts across the screen
+          Equally divided into 4 equal parts across the screen
           ───────────────────────────────────────────────────────────── */}
       <nav
         aria-label="Mobile Bottom Navigation"
-        className="grid grid-cols-5 md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#113B24] border-t border-[#1E5D32] px-1 py-2 items-center select-none shadow-2xl text-slate-300 w-full"
+        className="grid grid-cols-4 md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#113B24] border-t border-[#1E5D32] px-1 py-2 items-center select-none shadow-2xl text-slate-300 w-full"
       >
         {navItems.map((item) => {
           const isActive = activeTab === item.id;

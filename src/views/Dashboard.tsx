@@ -12,7 +12,6 @@ import {
   TrendingUp,
   MapPin,
   ShieldCheck,
-  ChevronRight,
   FileText,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -28,7 +27,6 @@ export const Dashboard: React.FC = () => {
     setSelectedProjectId,
     settings,
     openAddPropertyModal,
-    setActiveTab,
     openLeadDrawer,
     openPropertyDrawer,
   } = useApp();
@@ -234,28 +232,6 @@ export const Dashboard: React.FC = () => {
           </div>
           <ArrowUpRight className="w-5 h-5 text-[#EAB308] stroke-[2.5] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
         </button>
-
-        {/* Action 2: View Recent Leads */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('leads')}
-          className="group w-full min-h-[66px] p-4 sm:p-4.5 bg-[#15803D] hover:bg-[#11652E] active:scale-[0.99] border border-[#1E5C31] text-white rounded-2xl shadow-sm flex items-center justify-between transition-all cursor-pointer text-left"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-full bg-[#113B24] border border-[#EAB308]/30 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-xs">
-              <Users className="w-6 h-6 text-[#EAB308] stroke-[2]" />
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-white tracking-tight leading-tight">
-                View Recent Leads
-              </h3>
-              <p className="text-xs sm:text-sm text-emerald-100 font-medium mt-0.5">
-                Customer pipeline & visits
-              </p>
-            </div>
-          </div>
-          <ArrowUpRight className="w-5 h-5 text-[#EAB308] stroke-[2.5] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
-        </button>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -268,15 +244,6 @@ export const Dashboard: React.FC = () => {
             <Users className="w-4 h-4 text-[#15803D]" />
             <span>Recent Lead Inquiries</span>
           </h3>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('leads')}
-            className="text-xs font-bold text-[#15803D] hover:text-[#166534] flex items-center gap-1 cursor-pointer"
-          >
-            <span>View All Leads</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
         </div>
 
         {/* Separate Individual Cards for Each Lead */}

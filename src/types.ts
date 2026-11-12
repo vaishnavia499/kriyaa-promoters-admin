@@ -1,4 +1,4 @@
-export type NavigationTab = 'dashboard' | 'projects' | 'properties' | 'leads' | 'hotspot-simulator' | 'settings';
+export type NavigationTab = 'dashboard' | 'projects' | 'properties' | 'hotspot-simulator' | 'settings';
 
 export type AppMode = 'public' | 'admin';
 

@@ -12,7 +12,6 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './views/Dashboard';
 import { Projects } from './views/Projects';
 import { Properties } from './views/Properties';
-import { Leads } from './views/Leads';
 import { Settings } from './views/Settings';
 import { OwnerHotspotSimulator } from './views/admin/OwnerHotspotSimulator';
 import { PropertyDetailDrawer } from './components/PropertyDetailDrawer';
@@ -29,7 +28,6 @@ const AdminViewRouter: React.FC = () => {
       {activeTab === 'dashboard' && <Dashboard />}
       {activeTab === 'projects' && <Projects />}
       {activeTab === 'properties' && <Properties />}
-      {activeTab === 'leads' && <Leads />}
       {activeTab === 'hotspot-simulator' && <OwnerHotspotSimulator />}
       {activeTab === 'settings' && <Settings />}
 
