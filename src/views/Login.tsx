@@ -55,7 +55,7 @@ export const Login: React.FC = () => {
       {/* Top Header Brand */}
       <div className="max-w-6xl mx-auto w-full flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-200/80 p-1.5 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-full bg-white shadow-sm border-2 border-[#EAB308] p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
             <KriyaaLogo className="w-full h-full" />
           </div>
           <div>

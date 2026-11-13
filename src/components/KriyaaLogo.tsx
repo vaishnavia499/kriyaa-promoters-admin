@@ -9,7 +9,7 @@ export const KriyaaLogo: React.FC<KriyaaLogoProps> = ({ className = 'w-full h-fu
     <img
       src="/kriyaa-logo.jpg"
       alt="Kriyaa Promoters Logo"
-      className={`${className} object-contain`}
+      className={`${className} object-cover rounded-full`}
       draggable={false}
     />
   );

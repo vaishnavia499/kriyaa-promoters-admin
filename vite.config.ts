@@ -1,12 +1,12 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { defineConfig, Plugin } from 'vite';
+import { defineConfig, PluginOption } from 'vite';
 
 export default defineConfig(async ({ command }) => {
   const dir = typeof import.meta.dirname !== 'undefined' ? import.meta.dirname : path.resolve();
 
-  const plugins: Plugin[] = [react(), tailwindcss()];
+  const plugins: PluginOption[] = [react(), tailwindcss()];
 
   // Only attach Express API dev middleware when running local dev server
   if (command === 'serve') {

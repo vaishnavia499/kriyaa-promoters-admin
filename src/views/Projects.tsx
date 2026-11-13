@@ -546,11 +546,11 @@ export const Projects: React.FC = () => {
               {/* PLOT EDIT PANEL (Centered Modal above bottom nav) */}
               {activePlotForQuickAction && (
                 <div
-                  className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
+                  className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 pb-28 sm:pb-6"
                   onClick={() => setActivePlotForQuickAction(null)}
                 >
                   <div
-                    className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-5 bg-white dark:bg-slate-900 rounded-3xl border-2 border-[#15803D] shadow-2xl space-y-4"
+                    className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-5 bg-white rounded-3xl border-2 border-[#15803D] shadow-2xl space-y-4"
                     onClick={(e) => e.stopPropagation()}
                   >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -795,10 +795,13 @@ export const Projects: React.FC = () => {
           </div>
         </div>
 
-        {/* Register New Project Button (Positioned on the Right, clean without extra +) */}
+        {/* Register New Project Button (Positioned on the Right, navigates to Add Projects) */}
         <button
           type="button"
-          onClick={openNewProjectWizard}
+          onClick={() => {
+            setActiveTab('hotspot-simulator');
+            openNewProjectWizard();
+          }}
           className="min-h-[42px] px-4 py-2 bg-[#15803D] hover:bg-[#166534] active:scale-[0.98] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm border border-[#CA8A04]/40 hover:border-[#EAB308] transition-all cursor-pointer shrink-0 whitespace-nowrap self-stretch sm:self-auto"
         >
           <span>Register New Project</span>

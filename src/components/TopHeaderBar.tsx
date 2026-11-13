@@ -4,8 +4,6 @@ import {
   ShieldCheck,
   MapPin,
   ChevronDown,
-  Sun,
-  Moon,
   Plus,
   Layers,
   Check,
@@ -24,6 +22,7 @@ export const TopHeaderBar: React.FC = () => {
     setSelectedProjectId,
     openAddProjectModal,
     openAddPropertyModal,
+    openNewProjectWizard,
     setActiveTab,
     properties,
     settings,
@@ -31,14 +30,12 @@ export const TopHeaderBar: React.FC = () => {
     logout,
   } = useApp();
 
-  // 1. FORCE LIGHT MODE (Dark mode removed)
+  // Enforce pure light mode (Dark mode removed)
   useEffect(() => {
     try {
       document.documentElement.classList.remove('dark');
       localStorage.removeItem('kriyaa_theme');
-    } catch (e) {
-      console.error('Failed to enforce light mode:', e);
-    }
+    } catch {}
   }, []);
 
   // 2. DROPDOWN POPUP STATES
@@ -81,21 +78,15 @@ export const TopHeaderBar: React.FC = () => {
     };
   };
 
-  // Only fully completed projects are shown in the header project switcher
-  const completedProjects = useMemo(
-    () => projects.filter((p) => !p.isIncomplete),
-    [projects]
-  );
-
   return (
     <header ref={headerRef} className="sticky top-0 z-40 w-full shadow-md text-white select-none">
       {/* ─────────────────────────────────────────────────────────────
           1. MOBILE TOP HEADER (DEEP FOREST GREEN #113B24)
           ───────────────────────────────────────────────────────────── */}
       <div className="w-full bg-[#113B24] border-b border-[#1E5D32]/60 px-3 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between gap-2">
-        {/* Top Left: Rectangular Brand Logo badge + Title + Italic Gold Tagline */}
+        {/* Top Left: Circular Brand Logo badge + Title + Italic Gold Tagline */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white border-2 border-[#EAB308]/80 p-0.5 flex items-center justify-center shrink-0 shadow-xs relative overflow-hidden">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white border-2 border-[#EAB308] p-0.5 flex items-center justify-center shrink-0 shadow-xs relative overflow-hidden">
             <img
               src={settings.logoUrl || '/kriyaa-logo.jpg'}
               alt="Kriyaa Promoters"
@@ -114,8 +105,6 @@ export const TopHeaderBar: React.FC = () => {
 
         {/* Top Right Action Group: Deep Forest Green & Gold Action Button ("+ ▾") */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-
-
           {/* Deep Forest Green and Gold Bordered Action Button ("+ ▾") */}
           <div className="relative">
             <button
@@ -155,7 +144,8 @@ export const TopHeaderBar: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setIsActionMenuOpen(false);
-                      openAddProjectModal();
+                      setActiveTab('hotspot-simulator');
+                      openNewProjectWizard();
                     }}
                     className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer text-slate-800 dark:text-slate-100"
                   >
@@ -319,7 +309,7 @@ export const TopHeaderBar: React.FC = () => {
                     </span>
                   </div>
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                    {completedProjects.length} Layouts
+                    {projects.length} Layouts
                   </span>
                 </div>
 
@@ -374,7 +364,7 @@ export const TopHeaderBar: React.FC = () => {
                   <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
 
                   {/* Individual Layouts */}
-                  {completedProjects.map((proj) => {
+                  {projects.map((proj) => {
                     const isSelected = selectedProjectId === proj.id;
                     const stats = getProjectPlotStats(proj.id);
 

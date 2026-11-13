@@ -77,14 +77,15 @@ export const PropertyFormModal: React.FC = () => {
       setProjectId(targetProjId);
       const matched = projects.find((p) => p.id === targetProjId);
       const projName = matched?.name || 'Golden City';
-      setTitle(`${projName} · Prime Plotted Layout`);
+      const baseRate = matched?.basePricePerSqFt || 2200;
+      setTitle(`${projName} Plot`);
       setPlotNumber('');
       setCategory('Land/Plots');
       setStatus('Available');
-      setTotalPrice(2640000);
-      setPricePerSqFt(2200);
+      setPricePerSqFt(baseRate);
       setPlotDimensions('30x40 ft');
       setAreaSqFt(1200);
+      setTotalPrice(1200 * baseRate);
       setFacing('North');
       setRoadWidth('40 ft');
       setApprovals(['DTCP', 'RERA', 'Patta']);
@@ -93,8 +94,7 @@ export const PropertyFormModal: React.FC = () => {
       setAddress(matched ? `${matched.name}, ${matched.location}` : 'Sector B, Golden City, NH Bypass Corridor, Cuddalore');
       setGoogleMapsUrl('https://maps.google.com/?q=11.7480,79.7714');
       setImages([
-        'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80',
-        'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80'
+        'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80'
       ]);
       setDescription(`Prime DTCP approved residential plot in ${projName} with avenue plantation, sweet potable water pipeline, and blacktop tar road.`);
     }
@@ -250,10 +250,10 @@ export const PropertyFormModal: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">
-                    {editingProperty ? 'Edit Property Details' : 'Add New Property Unit'}
+                    {editingProperty ? 'Edit Plot Details' : 'Register New Plot'}
                   </h3>
                   <p className="text-xs text-emerald-400">
-                    Kriyaa Promoters Inventory System
+                    Enter plot number, area (sq.ft), pricing, and layout specifications
                   </p>
                 </div>
               </div>
@@ -276,135 +276,169 @@ export const PropertyFormModal: React.FC = () => {
                 </div>
               )}
 
-              {/* Project / Layout Scheme Selector */}
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Project / Township Layout *</label>
-                <select
-                  value={projectId}
-                  onChange={(e) => {
-                    const newId = e.target.value;
-                    setProjectId(newId);
-                    const matched = projects.find((p) => p.id === newId);
-                    if (matched && !editingProperty) {
-                      setTitle(`${matched.name} Plot #${plotNumber || '01'}`);
-                      setAddress(`${matched.name}, ${matched.location}`);
-                    }
-                  }}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  {projects.map((proj) => (
-                    <option key={proj.id} value={proj.id}>
-                      {proj.name} ({proj.location} · {proj.dtcpNumber})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Title & Plot Number */}
+              {/* 1. PLOT NUMBER & TOWNSHIP PROJECT */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2 space-y-1">
-                  <label className="font-bold text-slate-700">Property Title *</label>
-                  <input
-                    type="text"
-                    required
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-                  />
-                </div>
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Plot # *</label>
+                  <label className="font-bold text-slate-700">Plot Number *</label>
                   <input
                     type="text"
                     required
+                    placeholder="e.g. 15 or 42A"
                     value={plotNumber}
-                    onChange={(e) => setPlotNumber(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPlotNumber(val);
+                      if (!editingProperty) {
+                        const matched = projects.find((p) => p.id === projectId);
+                        setTitle(`${matched?.name || 'Project'} Plot #${val || ''}`);
+                      }
+                    }}
+                    className="w-full p-2.5 rounded-xl border-2 border-emerald-600/50 bg-emerald-50/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-extrabold text-sm text-[#113B24]"
                   />
                 </div>
-              </div>
 
-              {/* Category & Status */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Category</label>
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="font-bold text-slate-700">Project / Township Layout *</label>
                   <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as PropertyCategory)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white cursor-pointer font-medium"
+                    value={projectId}
+                    onChange={(e) => {
+                      const newId = e.target.value;
+                      setProjectId(newId);
+                      const matched = projects.find((p) => p.id === newId);
+                      if (matched && !editingProperty) {
+                        setTitle(`${matched.name} Plot #${plotNumber || ''}`);
+                        setAddress(`${matched.name}, ${matched.location}`);
+                        if (matched.basePricePerSqFt) {
+                          setPricePerSqFt(matched.basePricePerSqFt);
+                          setTotalPrice(areaSqFt * matched.basePricePerSqFt);
+                        }
+                      }
+                    }}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
-                    <option value="Land/Plots">Land/Plots</option>
-                    <option value="Residential">Residential</option>
-                    <option value="Commercial">Commercial</option>
+                    {projects.map((proj) => (
+                      <option key={proj.id} value={proj.id}>
+                        {proj.name} ({proj.location} · {proj.dtcpNumber})
+                      </option>
+                    ))}
                   </select>
                 </div>
+              </div>
+
+              {/* 2. AREA SQ.FT, DIMENSIONS & CENTS */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-700 uppercase text-[10px] tracking-wider">
+                    Plot Measurement &amp; Size
+                  </span>
+                  <span className="text-[11px] font-bold text-[#15803D]">
+                    = {Number((areaSqFt / 435.6).toFixed(2))} Cents
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Area Sq.Ft *</label>
+                    <input
+                      type="number"
+                      required
+                      value={areaSqFt}
+                      onChange={(e) => handleSqFtChange(Number(e.target.value))}
+                      placeholder="e.g. 1200"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-extrabold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Plot Dimensions</label>
+                    <input
+                      type="text"
+                      value={plotDimensions}
+                      onChange={(e) => setPlotDimensions(e.target.value)}
+                      placeholder="e.g. 30x40 ft"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Sq.Ft Presets */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] text-slate-500 font-semibold mr-1">Quick Select:</span>
+                  {[600, 800, 1000, 1200, 1500, 1800, 2400].map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => handleSqFtChange(size)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                        areaSqFt === size
+                          ? 'bg-[#15803D] text-white border-[#15803D]'
+                          : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-500'
+                      }`}
+                    >
+                      {size} sq.ft
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. COST & VALUATION */}
+              <div className="p-3.5 rounded-2xl bg-[#edf4ee]/60 border border-emerald-200 space-y-2.5">
+                <span className="font-bold text-[#113B24] uppercase text-[10px] tracking-wider block">
+                  Plot Cost &amp; Valuation
+                </span>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Cost / Rate per Sq.Ft (₹)</label>
+                    <input
+                      type="number"
+                      step="50"
+                      value={pricePerSqFt}
+                      onChange={(e) => handleRateChange(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Total Plot Cost (₹) *</label>
+                    <input
+                      type="number"
+                      value={totalPrice}
+                      onChange={(e) => setTotalPrice(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl border border-emerald-300 bg-white font-black text-emerald-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-[11px] font-bold text-emerald-800 flex items-center justify-between">
+                  <span>Calculated Valuation:</span>
+                  <span className="text-sm font-black text-[#15803D]">
+                    ₹{(totalPrice / 100000).toFixed(2)} Lakhs
+                  </span>
+                </div>
+              </div>
+
+              {/* 4. STATUS, FACING & ROAD */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700">Status</label>
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as PropertyStatus)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white cursor-pointer font-bold text-emerald-800"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-white cursor-pointer font-bold text-emerald-800"
                   >
                     <option value="Available">Available</option>
                     <option value="Reserved">Reserved</option>
                     <option value="Sold">Sold</option>
                   </select>
                 </div>
-              </div>
 
-              {/* Pricing: Price per SqFt & Total Price */}
-              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Rate per Sq.Ft (₹)</label>
-                  <input
-                    type="number"
-                    step="50"
-                    value={pricePerSqFt}
-                    onChange={(e) => handleRateChange(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-lg border border-slate-200 bg-white font-bold"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Total Price (₹)</label>
-                  <input
-                    type="number"
-                    value={totalPrice}
-                    onChange={(e) => setTotalPrice(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-lg border border-slate-200 bg-white font-extrabold text-emerald-700"
-                  />
-                  <span className="block text-[10px] text-slate-500 font-medium">
-                    = ₹{(totalPrice / 100000).toFixed(2)} Lakhs
-                  </span>
-                </div>
-              </div>
-
-              {/* Dimensions, Area & Facing */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Dimensions</label>
-                  <input
-                    type="text"
-                    value={plotDimensions}
-                    onChange={(e) => setPlotDimensions(e.target.value)}
-                    placeholder="e.g. 30x40 ft"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white font-medium"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Area Sq.Ft</label>
-                  <input
-                    type="number"
-                    value={areaSqFt}
-                    onChange={(e) => handleSqFtChange(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white font-bold"
-                  />
-                </div>
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700">Facing</label>
                   <select
                     value={facing}
                     onChange={(e) => setFacing(e.target.value as any)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white cursor-pointer font-medium"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-white cursor-pointer font-medium"
                   >
                     <option value="North">North</option>
                     <option value="East">East</option>
@@ -414,10 +448,7 @@ export const PropertyFormModal: React.FC = () => {
                     <option value="North-West">North-West</option>
                   </select>
                 </div>
-              </div>
 
-              {/* Road & Flags */}
-              <div className="grid grid-cols-3 gap-3 items-center pt-1">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700">Road Width</label>
                   <input
@@ -425,11 +456,12 @@ export const PropertyFormModal: React.FC = () => {
                     value={roadWidth}
                     onChange={(e) => setRoadWidth(e.target.value)}
                     placeholder="e.g. 40 ft"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white font-medium"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-medium"
                   />
                 </div>
+              </div>
 
-                <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer mt-5">
+                <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer mt-2">
                   <input
                     type="checkbox"
                     checked={isCornerPlot}
@@ -439,7 +471,7 @@ export const PropertyFormModal: React.FC = () => {
                   <span className="font-bold text-slate-800">Corner Plot</span>
                 </label>
 
-                <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer mt-5">
+                <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer mt-2">
                   <input
                     type="checkbox"
                     checked={isGatedCommunity}
@@ -448,7 +480,6 @@ export const PropertyFormModal: React.FC = () => {
                   />
                   <span className="font-bold text-slate-800">Gated Community</span>
                 </label>
-              </div>
 
               {/* Approvals Checkboxes */}
               <div className="space-y-1">

@@ -44,8 +44,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           {/* Brand Header */}
           <div className="p-5 border-b border-[#1E5D32]">
             <div className="flex items-center gap-3">
-              {/* Logo Icon Box (Circle Frame) */}
-              <div className="w-10 h-10 rounded-full bg-white shadow-sm border-2 border-[#EAB308]/80 p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
+              {/* Logo Icon Box in Circle Frame */}
+              <div className="w-10 h-10 rounded-full bg-white shadow-sm border-2 border-[#EAB308] p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
                 <img src={settings.logoUrl || '/kriyaa-logo.jpg'} alt={settings.companyName} className="w-full h-full object-cover rounded-full" />
               </div>
               <div className="overflow-hidden min-w-0">
