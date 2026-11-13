@@ -77,9 +77,8 @@ export const PropertyFormModal: React.FC = () => {
       setProjectId(targetProjId);
       const matched = projects.find((p) => p.id === targetProjId);
       const projName = matched?.name || 'Golden City';
-      const randomNum = Math.floor(Math.random() * 80) + 1;
-      setTitle(`${projName} Plot #${randomNum} · Prime Plotted Layout`);
-      setPlotNumber(String(randomNum));
+      setTitle(`${projName} · Prime Plotted Layout`);
+      setPlotNumber('');
       setCategory('Land/Plots');
       setStatus('Available');
       setTotalPrice(2640000);

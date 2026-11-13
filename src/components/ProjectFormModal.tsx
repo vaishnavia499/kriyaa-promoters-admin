@@ -35,7 +35,7 @@ export const ProjectFormModal: React.FC = () => {
   const [reraNumber, setReraNumber] = useState('');
   const [totalAreaExtent, setTotalAreaExtent] = useState('10.0 Acres');
   const [launchYear, setLaunchYear] = useState<number>(2024);
-  const [status, setStatus] = useState<'Active' | 'Upcoming' | 'Completed'>('Active');
+  const [status, setStatus] = useState<Project['status']>('Active');
   const [masterPlanImage, setMasterPlanImage] = useState('');
   const [description, setDescription] = useState('');
   const [isDragging, setIsDragging] = useState(false);

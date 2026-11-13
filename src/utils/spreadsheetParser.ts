@@ -10,8 +10,35 @@ export interface ParsedPlotRow {
   pricePerSqFt: number;
   totalPrice: number;
   isCornerPlot: boolean;
+  buyerName?: string;
+  remarks?: string;
   isValid: boolean;
   errors: string[];
+}
+
+function parseCsvLine(line: string, delimiter: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"' || char === "'") {
+      if (inQuotes && i + 1 < line.length && line[i + 1] === char) {
+        current += char;
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result;
 }
 
 export function parseCsvText(csvText: string): { rows: ParsedPlotRow[]; fatalError?: string } {
@@ -19,39 +46,62 @@ export function parseCsvText(csvText: string): { rows: ParsedPlotRow[]; fatalErr
     return { rows: [], fatalError: 'File is empty' };
   }
 
+  // Remove Byte Order Mark (BOM) if present
+  const cleanText = csvText.replace(/^\uFEFF/, '').trim();
+
   // Split lines
-  const lines = csvText.split(/\r\n|\n|\r/).filter((l) => l.trim().length > 0);
-  if (lines.length < 2) {
+  const rawLines = cleanText.split(/\r\n|\n|\r/).map((l) => l.trim()).filter((l) => l.length > 0);
+  if (rawLines.length < 2) {
     return { rows: [], fatalError: 'File must contain a header row and at least one data row' };
   }
 
-  // Parse header
-  const headerLine = lines[0];
-  const delimiter = headerLine.includes('\t') ? '\t' : headerLine.includes(';') ? ';' : ',';
-  const headers = headerLine.split(delimiter).map((h) => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+  // Detect delimiter from the first few lines
+  const sample = rawLines.slice(0, 5).join('\n');
+  const delimiter = sample.includes('\t') ? '\t' : sample.includes(';') ? ';' : ',';
+
+  // Find the header row (scan first 10 rows to skip any title or empty banner rows)
+  let headerRowIndex = -1;
+  let headers: string[] = [];
+  let plotNumIdx = -1;
+
+  for (let i = 0; i < Math.min(rawLines.length, 10); i++) {
+    const cols = parseCsvLine(rawLines[i], delimiter).map((h) =>
+      h.toLowerCase().replace(/[^a-z0-9]/g, '')
+    );
+    const foundIdx = cols.findIndex(
+      (h) => h.includes('plot') || h === 'number' || h === 'plotno' || h === 'plotnumber' || h === 'plotid' || h === 'no' || h === 'id'
+    );
+    if (foundIdx !== -1) {
+      headerRowIndex = i;
+      headers = cols;
+      plotNumIdx = foundIdx;
+      break;
+    }
+  }
+
+  if (headerRowIndex === -1 || plotNumIdx === -1) {
+    return { rows: [], fatalError: 'Could not find a "Plot Number" column in header row. Please ensure your header includes "Plot Number" or "Plot No".' };
+  }
 
   // Header index resolution
-  const plotNumIdx = headers.findIndex((h) => h.includes('plot') || h === 'number' || h === 'no' || h === 'id');
   const dimIdx = headers.findIndex((h) => h.includes('dim') || h.includes('size'));
   const sqftIdx = headers.findIndex((h) => h.includes('sqft') || h.includes('area') || h.includes('extent'));
   const centsIdx = headers.findIndex((h) => h.includes('cent'));
   const facingIdx = headers.findIndex((h) => h.includes('facing') || h.includes('direction'));
   const roadIdx = headers.findIndex((h) => h.includes('road') || h.includes('width'));
   const rateIdx = headers.findIndex((h) => h.includes('rate') || h.includes('sqftprice') || h.includes('pricepersqft'));
-  const priceIdx = headers.findIndex((h) => (h.includes('price') || h.includes('cost') || h.includes('total')) && !h.includes('per'));
+  const priceIdx = headers.findIndex((h) => (h.includes('price') || h.includes('cost') || h.includes('total')) && !h.includes('per') && !h.includes('rate'));
   const statusIdx = headers.findIndex((h) => h.includes('status') || h.includes('availability'));
   const cornerIdx = headers.findIndex((h) => h.includes('corner'));
-
-  if (plotNumIdx === -1) {
-    return { rows: [], fatalError: 'Could not find a "Plot Number" column in header row' };
-  }
+  const buyerIdx = headers.findIndex((h) => h.includes('buyer') || h.includes('client') || h.includes('customer'));
+  const remarksIdx = headers.findIndex((h) => h.includes('remark') || h.includes('note'));
 
   const seenPlots = new Set<string>();
   const parsedRows: ParsedPlotRow[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const cols = rawLine.split(delimiter).map((c) => c.trim().replace(/^["']|["']$/g, ''));
+  for (let i = headerRowIndex + 1; i < rawLines.length; i++) {
+    const rawLine = rawLines[i];
+    const cols = parseCsvLine(rawLine, delimiter);
     if (cols.length === 0 || cols.every((c) => c === '')) continue;
 
     const rowErrors: string[] = [];
@@ -71,7 +121,6 @@ export function parseCsvText(csvText: string): { rows: ParsedPlotRow[]; fatalErr
     // Area Sq.Ft
     let areaSqFt = sqftIdx !== -1 ? parseFloat(cols[sqftIdx].replace(/[^0-9.]/g, '')) : 1200;
     if (isNaN(areaSqFt) || areaSqFt <= 0) {
-      rowErrors.push('Invalid area sq.ft value');
       areaSqFt = 1200;
     }
 
@@ -91,11 +140,11 @@ export function parseCsvText(csvText: string): { rows: ParsedPlotRow[]; fatalErr
     else if (rawFacing.includes('south')) facing = 'South';
 
     // Road width
-    const roadWidth = (roadIdx !== -1 ? cols[roadIdx] : '') || '40 ft';
+    const roadWidth = (roadIdx !== -1 ? cols[roadIdx] : '') || '30 Ft Tar Road';
 
     // Price per Sq.Ft
-    let pricePerSqFt = rateIdx !== -1 ? parseFloat(cols[rateIdx].replace(/[^0-9.]/g, '')) : 2100;
-    if (isNaN(pricePerSqFt) || pricePerSqFt <= 0) pricePerSqFt = 2100;
+    let pricePerSqFt = rateIdx !== -1 ? parseFloat(cols[rateIdx].replace(/[^0-9.]/g, '')) : 1200;
+    if (isNaN(pricePerSqFt) || pricePerSqFt <= 0) pricePerSqFt = 1200;
 
     // Total Price
     let totalPrice = priceIdx !== -1 ? parseFloat(cols[priceIdx].replace(/[^0-9.]/g, '')) : Math.round(areaSqFt * pricePerSqFt);
@@ -105,9 +154,14 @@ export function parseCsvText(csvText: string): { rows: ParsedPlotRow[]; fatalErr
     const rawStatus = (statusIdx !== -1 ? cols[statusIdx] : '').toLowerCase();
     let status: ParsedPlotRow['status'] = 'Available';
     if (rawStatus.includes('sold')) status = 'Sold';
-    else if (rawStatus.includes('reserve') || rawStatus.includes('book')) status = 'Reserved';
+    else if (rawStatus.includes('reserve') || rawStatus.includes('book') || rawStatus.includes('hold')) status = 'Reserved';
 
-    const isCorner = cornerIdx !== -1 ? cols[cornerIdx].toLowerCase() === 'yes' || cols[cornerIdx].toLowerCase() === 'true' : false;
+    const isCorner = cornerIdx !== -1
+      ? cols[cornerIdx].toLowerCase() === 'yes' || cols[cornerIdx].toLowerCase() === 'true'
+      : (cols[remarksIdx] || '').toLowerCase().includes('corner');
+
+    const buyerName = buyerIdx !== -1 ? cols[buyerIdx] : undefined;
+    const remarks = remarksIdx !== -1 ? cols[remarksIdx] : undefined;
 
     parsedRows.push({
       plotNumber: plotNum,
@@ -121,6 +175,8 @@ export function parseCsvText(csvText: string): { rows: ParsedPlotRow[]; fatalErr
       pricePerSqFt,
       totalPrice,
       isCornerPlot: isCorner,
+      buyerName,
+      remarks,
       isValid: rowErrors.length === 0,
       errors: rowErrors,
     });

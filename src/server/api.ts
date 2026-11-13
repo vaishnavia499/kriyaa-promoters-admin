@@ -43,22 +43,12 @@ apiRouter.get('/public/projects', (_req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const published = db.projects
-      .filter((p) => p.isPublished)
+      .filter((p) => p.isPublished !== false)
       .map((p) => ({
-        id: p.id,
-        name: p.name,
-        location: p.location,
-        district: p.district,
-        dtcpNumber: p.dtcpNumber,
-        reraNumber: p.reraNumber,
-        masterPlanImage: p.layoutImageUrl || p.masterPlanImage,
-        layoutImageUrl: p.layoutImageUrl || p.masterPlanImage,
-        description: p.description,
-        status: p.status,
-        totalAreaExtent: p.totalAreaExtent,
-        launchYear: p.launchYear,
-        geoCoordinates: p.geoCoordinates,
-        updatedAt: p.updatedAt,
+        ...p,
+        isPublished: true,
+        masterPlanImage: p.masterPlanImage || p.layoutImageUrl || '/golden-city-layout.jpg',
+        layoutImageUrl: p.layoutImageUrl || p.masterPlanImage || '/golden-city-layout.jpg',
       }));
 
     res.json({ projects: published });
@@ -201,36 +191,39 @@ apiRouter.get('/admin/projects', requireAdmin, (_req: Request, res: Response) =>
 // Create a new project
 apiRouter.post('/admin/projects', requireAdmin, (req: Request, res: Response) => {
   try {
-    const { name, location, district, dtcpNumber, reraNumber, description, status, masterPlanImage, totalAreaExtent, launchYear } = req.body;
+    const { name, location, district, dtcpNumber } = req.body;
 
     if (!name || !location || !dtcpNumber) {
       return res.status(400).json({ error: 'Missing required fields: name, location, and dtcpNumber are required' });
     }
 
     const db = getDatabase();
-    const id = `proj-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString(36)}`;
+    const id = req.body.id || `proj-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString(36)}`;
     const now = new Date().toISOString();
 
     const newProject: StoredProject = {
+      ...req.body,
       id,
       name: name.trim(),
       location: location.trim(),
       district: (district || `${location} District`).trim(),
       dtcpNumber: dtcpNumber.trim(),
-      reraNumber: reraNumber?.trim() || undefined,
-      description: description?.trim() || 'DTCP Sanctioned residential township with premium villa plots.',
-      status: status || 'Upcoming',
-      isPublished: false, // Default new project is draft
-      masterPlanImage: masterPlanImage || 'https://images.unsplash.com/photo-1524813686514-a57563d77d61?auto=format&fit=crop&w=1400&q=85',
-      layoutImageUrl: masterPlanImage || 'https://images.unsplash.com/photo-1524813686514-a57563d77d61?auto=format&fit=crop&w=1400&q=85',
-      layoutVersion: 1,
-      totalAreaExtent: totalAreaExtent || '10.0 Acres',
-      launchYear: launchYear ? Number(launchYear) : new Date().getFullYear(),
+      isPublished: req.body.isPublished !== undefined ? Boolean(req.body.isPublished) : true,
+      masterPlanImage: req.body.masterPlanImage || req.body.layoutImageUrl || '/golden-city-layout.jpg',
+      layoutImageUrl: req.body.layoutImageUrl || req.body.masterPlanImage || '/golden-city-layout.jpg',
+      layoutVersion: req.body.layoutVersion || 1,
+      totalAreaExtent: req.body.totalAreaExtent || '10.0 Acres',
+      launchYear: req.body.launchYear ? Number(req.body.launchYear) : new Date().getFullYear(),
       createdAt: now,
       updatedAt: now,
     };
 
-    db.projects.push(newProject);
+    const existingIndex = db.projects.findIndex((p) => p.id === id);
+    if (existingIndex !== -1) {
+      db.projects[existingIndex] = { ...db.projects[existingIndex], ...newProject };
+    } else {
+      db.projects.push(newProject);
+    }
     saveDatabase(db);
 
     res.status(201).json({ success: true, project: newProject });
@@ -239,25 +232,46 @@ apiRouter.post('/admin/projects', requireAdmin, (req: Request, res: Response) =>
   }
 });
 
-// Update project
+// Update or Upsert project
 apiRouter.put('/admin/projects/:id', requireAdmin, (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const index = db.projects.findIndex((p) => p.id === req.params.id);
+    const now = new Date().toISOString();
 
+    let updated: StoredProject;
     if (index === -1) {
-      return res.status(404).json({ error: 'Project not found' });
+      // Upsert: Create project if it doesn't exist yet
+      updated = {
+        name: req.body.name || 'New Project',
+        location: req.body.location || 'Tamil Nadu',
+        district: req.body.district || `${req.body.location || ''} District`,
+        dtcpNumber: req.body.dtcpNumber || 'DTCP Sanctioned',
+        description: req.body.description || '',
+        status: req.body.status || 'Active',
+        isPublished: req.body.isPublished !== undefined ? Boolean(req.body.isPublished) : true,
+        masterPlanImage: req.body.masterPlanImage || req.body.layoutImageUrl || '/golden-city-layout.jpg',
+        layoutImageUrl: req.body.layoutImageUrl || req.body.masterPlanImage || '/golden-city-layout.jpg',
+        layoutVersion: req.body.layoutVersion || 1,
+        totalAreaExtent: req.body.totalAreaExtent || '10.0 Acres',
+        launchYear: req.body.launchYear ? Number(req.body.launchYear) : new Date().getFullYear(),
+        ...req.body,
+        id: req.params.id,
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.projects.push(updated);
+    } else {
+      const existing = db.projects[index];
+      updated = {
+        ...existing,
+        ...req.body,
+        id: existing.id, // prevent ID change
+        updatedAt: now,
+      };
+      db.projects[index] = updated;
     }
 
-    const existing = db.projects[index];
-    const updated: StoredProject = {
-      ...existing,
-      ...req.body,
-      id: existing.id, // prevent ID change
-      updatedAt: new Date().toISOString(),
-    };
-
-    db.projects[index] = updated;
     saveDatabase(db);
 
     res.json({ success: true, project: updated });
@@ -270,22 +284,40 @@ apiRouter.put('/admin/projects/:id', requireAdmin, (req: Request, res: Response)
 apiRouter.post('/admin/projects/:id/publish', requireAdmin, (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const project = db.projects.find((p) => p.id === req.params.id);
+    const index = db.projects.findIndex((p) => p.id === req.params.id);
+    const now = new Date().toISOString();
 
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
+    let targetProject: StoredProject;
+    if (index === -1) {
+      // Create and publish
+      targetProject = {
+        name: req.body.name || 'Project Layout',
+        location: req.body.location || 'Tamil Nadu',
+        district: req.body.district || 'Cuddalore',
+        dtcpNumber: req.body.dtcpNumber || 'DTCP Sanctioned',
+        description: req.body.description || '',
+        status: req.body.status || 'Active',
+        isPublished: true,
+        masterPlanImage: req.body.masterPlanImage || '/golden-city-layout.jpg',
+        layoutImageUrl: req.body.layoutImageUrl || '/golden-city-layout.jpg',
+        layoutVersion: 1,
+        totalAreaExtent: req.body.totalAreaExtent || '10.0 Acres',
+        launchYear: new Date().getFullYear(),
+        ...req.body,
+        id: req.params.id,
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.projects.push(targetProject);
+    } else {
+      targetProject = db.projects[index];
+      targetProject.isPublished = true;
+      targetProject.updatedAt = now;
     }
 
-    const plots = db.plots.filter((p) => p.projectId === project.id);
-    if (plots.length === 0) {
-      return res.status(400).json({ error: 'Cannot publish a layout with 0 plots. Please import or add plots first.' });
-    }
-
-    project.isPublished = true;
-    project.updatedAt = new Date().toISOString();
     saveDatabase(db);
 
-    res.json({ success: true, message: `Project "${project.name}" published to live website!`, project });
+    res.json({ success: true, message: `Project "${targetProject.name}" published to live website!`, project: targetProject });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

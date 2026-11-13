@@ -12,6 +12,7 @@ import {
   Building2,
   Trash2,
   MapPin,
+  X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Lead, LeadStatus, LeadPreferredAction } from '../types';
@@ -19,6 +20,7 @@ import { Lead, LeadStatus, LeadPreferredAction } from '../types';
 export const Leads: React.FC = () => {
   const {
     filteredLeads: contextFilteredLeads,
+    projects,
     selectedProject,
     selectedProjectId,
     setSelectedProjectId,
@@ -28,8 +30,24 @@ export const Leads: React.FC = () => {
     saveLead,
   } = useApp();
 
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<string>('All Leads');
+
+  // Manual Lead Entry Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [leadProjectId, setLeadProjectId] = useState<string>(
+    selectedProjectId !== 'all' ? selectedProjectId : projects[0]?.id || ''
+  );
+  const [propertyOfInterest, setPropertyOfInterest] = useState('');
+  const [preferredAction, setPreferredAction] = useState<LeadPreferredAction>('Site Visit');
+  const [status, setStatus] = useState<LeadStatus>('New');
+  const [budgetLakhs, setBudgetLakhs] = useState('');
+  const [noteText, setNoteText] = useState('');
+  const [formError, setFormError] = useState('');
 
   // Filter tabs per prompt specifications
   const filterTabs = ['All Leads', 'New', 'Contacted', 'Site Visited', 'Closed'];
@@ -91,17 +109,48 @@ export const Leads: React.FC = () => {
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
-  const handleQuickAddLead = () => {
-    const randomId = Math.floor(Math.random() * 80) + 1;
+  const openAddLeadModal = () => {
+    setCustomerName('');
+    setPhone('');
+    setEmail('');
+    setLeadProjectId(selectedProjectId !== 'all' ? selectedProjectId : projects[0]?.id || '');
+    setPropertyOfInterest('');
+    setPreferredAction('Site Visit');
+    setStatus('New');
+    setBudgetLakhs('');
+    setNoteText('');
+    setFormError('');
+    setIsAddModalOpen(true);
+  };
+
+  const handleCreateLead = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerName.trim()) {
+      setFormError('Please enter the customer name.');
+      return;
+    }
+    if (!phone.trim()) {
+      setFormError('Please enter the customer phone number.');
+      return;
+    }
+
+    const chosenProject = projects.find((p) => p.id === leadProjectId);
+    const interest =
+      propertyOfInterest.trim() || (chosenProject ? `${chosenProject.name} Enquiry` : 'General Plot Enquiry');
+
     saveLead({
-      customerName: 'New On-Site Visitor',
-      phone: '+91 98400 ' + Math.floor(10000 + Math.random() * 90000),
-      propertyOfInterest: `Golden City Plot #${randomId}`,
-      preferredAction: 'Site Visit',
-      status: 'New',
-      budgetLakhs: 28,
-      notes: [`Inquiry captured on-site at Golden City entrance office`],
+      projectId: leadProjectId || undefined,
+      customerName: customerName.trim(),
+      phone: phone.trim(),
+      email: email.trim() || undefined,
+      propertyOfInterest: interest,
+      preferredAction,
+      status,
+      budgetLakhs: budgetLakhs ? Number(budgetLakhs) : undefined,
+      notes: noteText.trim() ? [noteText.trim()] : [],
     });
+
+    setIsAddModalOpen(false);
   };
 
   return (
@@ -142,43 +191,63 @@ export const Leads: React.FC = () => {
 
         {/* Stacked Search & Status Filter Controls (Row 1: Search, Row 2: Pills in One Line + Log New Lead) */}
         <div className="flex flex-col gap-3 w-full pt-2 border-t border-slate-100">
-          {/* Row 1: Full-Width Search Input */}
-          <div className="relative w-full">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search leads by customer name, mobile, or property..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs sm:text-sm pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
+          {/* Row 1: Search Input + Search Button */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearchQuery(searchInput);
+            }}
+            className="flex items-center gap-2 w-full"
+          >
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search leads by customer name, mobile, or property..."
+                value={searchInput}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSearchInput(val);
+                  if (!val.trim()) setSearchQuery('');
+                }}
+                className="w-full h-10 text-xs sm:text-sm pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <button
+              type="submit"
+              className="h-10 px-4 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white text-xs font-bold inline-flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Search</span>
+            </button>
+          </form>
 
-          {/* Row 2: Status Filter Buttons / Pills Below the Search Bar in One Line + Log New Lead */}
+          {/* Row 2: Status Filter Dropdown + Log New Lead */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar flex-nowrap text-xs">
-              {filterTabs.map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setSelectedFilter(tab)}
-                  className={`min-h-[36px] px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
-                    selectedFilter === tab
-                      ? 'bg-[#15803D] text-white shadow-sm border border-[#15803D]'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200/60'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
+            <div className="w-full sm:w-56">
+              <label htmlFor="lead-status-filter" className="sr-only">
+                Filter leads by status
+              </label>
+              <select
+                id="lead-status-filter"
+                value={selectedFilter}
+                onChange={(e) => setSelectedFilter(e.target.value)}
+                className="w-full h-10 px-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              >
+                {filterTabs.map((tab) => (
+                  <option key={tab} value={tab}>
+                    {tab}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Log New Lead Button Below Search on the Right */}
             <button
               type="button"
-              onClick={handleQuickAddLead}
+              onClick={openAddLeadModal}
               className="min-h-[40px] px-4 py-2 bg-[#15803D] hover:bg-[#166534] active:scale-[0.98] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-sm border border-[#CA8A04]/40 hover:border-[#EAB308] transition-all cursor-pointer whitespace-nowrap shrink-0 self-stretch sm:self-auto"
             >
-              <Plus className="w-4 h-4 text-[#EAB308]" />
               <span>Log New Lead</span>
             </button>
           </div>
@@ -354,6 +423,196 @@ export const Leads: React.FC = () => {
             </table>
           </div>
         </>
+      )}
+
+      {/* Manual Lead Entry Modal */}
+      {isAddModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setIsAddModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#0B2516] border border-slate-200 dark:border-[#1E5D32] shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 bg-[#113B24] text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#EAB308]" />
+                <h3 className="text-sm font-bold">Add New Lead Details</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                aria-label="Close modal"
+                className="p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateLead} className="p-5 space-y-3.5 text-xs">
+              {formError && (
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 font-semibold">
+                  {formError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                    Customer Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="e.g. Karthik Sundaram"
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. +91 98400 12345"
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                    Email (Optional)
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="customer@example.com"
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                    Project / Layout
+                  </label>
+                  <select
+                    value={leadProjectId}
+                    onChange={(e) => setLeadProjectId(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                    Property / Plot of Interest
+                  </label>
+                  <input
+                    type="text"
+                    value={propertyOfInterest}
+                    onChange={(e) => setPropertyOfInterest(e.target.value)}
+                    placeholder="e.g. Golden City Plot #14"
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                    Budget (₹ Lakhs)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={budgetLakhs}
+                    onChange={(e) => setBudgetLakhs(e.target.value)}
+                    placeholder="e.g. 28"
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                    Preferred Action
+                  </label>
+                  <select
+                    value={preferredAction}
+                    onChange={(e) => setPreferredAction(e.target.value as LeadPreferredAction)}
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="Site Visit">Site Visit</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="Callback">Callback</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                    Lead Status
+                  </label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as LeadStatus)}
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="New">New</option>
+                    <option value="Contacted">Contacted</option>
+                    <option value="Site Visited">Site Visited</option>
+                    <option value="Closed">Closed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Notes / Requirement
+                </label>
+                <textarea
+                  rows={2}
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  placeholder="Enter follow-up notes or plot preferences..."
+                  className="w-full p-3 rounded-xl border border-slate-200 dark:border-[#1E5D32] bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#1E5D32]">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="h-10 px-4 rounded-xl bg-slate-100 dark:bg-[#112F1C] text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="h-10 px-5 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white font-bold shadow-sm cursor-pointer"
+                >
+                  Save Lead
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,9 +1,66 @@
-export type NavigationTab = 'dashboard' | 'projects' | 'properties' | 'hotspot-simulator' | 'settings';
+export type NavigationTab = 'dashboard' | 'projects' | 'properties' | 'leads' | 'hotspot-simulator' | 'settings';
 
 export type AppMode = 'public' | 'admin';
 
 export type PropertyCategory = 'Land/Plots' | 'Residential' | 'Commercial';
 export type PropertyStatus = 'Available' | 'Reserved' | 'Sold';
+
+export interface ProjectApprovalItem {
+  id: string;
+  authority: string; // e.g. 'DTCP', 'CMDA', 'RERA', 'Patta'
+  number: string;
+  description: string;
+  verified: boolean;
+  documentUrl?: string;
+  documentName?: string;
+  visible: boolean;
+}
+
+export interface ProjectLegalTitle {
+  title: string;
+  description: string;
+  verificationDetails: string;
+  verified: boolean;
+  documentUrl?: string;
+  documentName?: string;
+  visible: boolean;
+}
+
+export interface ProjectFacilityItem {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  order: number;
+  enabled: boolean;
+}
+
+export interface ProjectNearbyItem {
+  id: string;
+  name: string;
+  category: string;
+  distance: string;
+  description?: string;
+  icon: string;
+  order: number;
+  visible: boolean;
+}
+
+export interface ProjectGalleryItem {
+  id: string;
+  url: string;
+  caption?: string;
+  featured?: boolean;
+  order: number;
+  visible: boolean;
+}
+
+export interface ProjectFeaturedSection {
+  enabled: boolean;
+  heading: string;
+  description: string;
+  bannerImage?: string;
+}
 
 export interface Project {
   id: string; // e.g. "proj-golden-city"
@@ -17,7 +74,7 @@ export interface Project {
   layoutPdfUrl?: string;
   layoutVersion?: number; // Tracks replacement layouts
   description: string;
-  status: 'Active' | 'Upcoming' | 'Completed';
+  status: 'Active' | 'Upcoming' | 'Completed' | 'Inactive';
   isPublished?: boolean; // True when published to live website
   totalAreaExtent?: string; // e.g. "12.5 Acres"
   launchYear?: number;
@@ -26,6 +83,19 @@ export interface Project {
   availablePlots?: number;
   reservedPlots?: number;
   soldPlots?: number;
+  approvals?: ProjectApprovalItem[];
+  legalTitle?: ProjectLegalTitle;
+  infrastructure?: ProjectFacilityItem[];
+  nearbyPlaces?: ProjectNearbyItem[];
+  gallery?: ProjectGalleryItem[];
+  featuredSection?: ProjectFeaturedSection;
+  hasDraftChanges?: boolean;
+  isIncomplete?: boolean;
+  wizardStep?: number;
+  videoUrl?: string;
+  bannerImage?: string;
+  basePricePerSqFt?: number;
+  defaultSqFt?: string;
   updatedAt?: string;
   createdAt?: string;
 }

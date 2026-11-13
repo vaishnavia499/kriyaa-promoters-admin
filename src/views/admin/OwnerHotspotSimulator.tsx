@@ -26,11 +26,38 @@ import {
   Video,
   MapPin,
   ExternalLink,
+  Search,
+  Loader2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Property, PropertyStatus, Project } from '../../types';
+import { Property, PropertyStatus, Project, ProjectFacilityItem, ProjectNearbyItem } from '../../types';
 import { parseCsvText, ParsedPlotRow } from '../../utils/spreadsheetParser';
 import { MasterLayoutViewer } from '../../components/public/MasterLayoutViewer';
+import { updateProjectDetailsInSupabase, uploadProjectAssetToSupabase } from '../../services/supabaseDataService';
+import * as XLSX from 'xlsx';
+
+const PREDEFINED_INFRA_OPTIONS = [
+  'Well-laid roads',
+  '24/7 electricity',
+  'Groundwater facility',
+  'Gated community',
+  'Street lighting',
+  'Drainage system',
+  'Water supply',
+  "Parks and children's play areas",
+  'Security facilities',
+];
+
+const WIZ_NEARBY_CATEGORIES = [
+  'Hospitals',
+  'Schools and colleges',
+  'Bus stands',
+  'Railway stations',
+  'Shopping centres',
+  'Main road access',
+  'Banks',
+  'Airports',
+];
 
 export const OwnerHotspotSimulator: React.FC = () => {
   const {
@@ -45,7 +72,9 @@ export const OwnerHotspotSimulator: React.FC = () => {
     importSpreadsheetPlots,
     savePlotBoundaries,
     saveProject,
+    deleteProject,
     updatePropertyStatus,
+    setActiveTab,
     newProjectWizardActive,
     openNewProjectWizard,
     closeNewProjectWizard,
@@ -69,6 +98,8 @@ export const OwnerHotspotSimulator: React.FC = () => {
   }, [properties, activeProject]);
 
   // Selected plot for boundary adjustment
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
   const activePlot = useMemo(() => {
     return currentPlots.find((p) => p.id === selectedPlotId) || currentPlots[0] || null;
@@ -143,58 +174,136 @@ export const OwnerHotspotSimulator: React.FC = () => {
   const [isPublishConfirmOpen, setIsPublishConfirmOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
-  // ── UNIFIED 3-STEP NEW PROJECT REGISTRATION WIZARD STATE ──
-  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
-  // Step 1: Project Metadata & Plot Inventory
+  // ── UNIFIED 4-STEP ADD PROJECT WIZARD STATE ──
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  // Step 1: Main Project Details
   const [wizProjName, setWizProjName] = useState('');
   const [wizProjLocation, setWizProjLocation] = useState('');
-  const [wizProjDistrict, setWizProjDistrict] = useState('Cuddalore');
+  const [wizProjDistrict, setWizProjDistrict] = useState('');
   const [wizProjDtcp, setWizProjDtcp] = useState('');
   const [wizProjRera, setWizProjRera] = useState('');
-  const [wizProjArea, setWizProjArea] = useState('10.0 Acres');
+  const [wizProjArea, setWizProjArea] = useState('');
+  const [wizSqFt, setWizSqFt] = useState('');
   const [wizProjYear, setWizProjYear] = useState(new Date().getFullYear().toString());
   const [wizProjStatus, setWizProjStatus] = useState<'Active' | 'Upcoming' | 'Completed'>('Active');
   const [wizProjDesc, setWizProjDesc] = useState('');
-  const [wizBasePricePerSqFt, setWizBasePricePerSqFt] = useState('1200');
-  const [wizTotalPlotsEstimate, setWizTotalPlotsEstimate] = useState('45');
+  const [wizBasePricePerSqFt, setWizBasePricePerSqFt] = useState('');
+  const [wizTotalPlotsEstimate, setWizTotalPlotsEstimate] = useState('');
+  const [wizLegalTitle, setWizLegalTitle] = useState('');
+  const [wizLegalDetails, setWizLegalDetails] = useState('');
+  const [wizLegalVerified, setWizLegalVerified] = useState(false);
   const [wizNewProjectId, setWizNewProjectId] = useState<string | null>(null);
 
-  // Step 2: Media & Walkthroughs
+  // Step 2: Media, Plot Detail Excel, 2D Image & Banner Image
+  const [wizMainImage, setWizMainImage] = useState('');
   const [wizPhotos, setWizPhotos] = useState<string[]>([]);
   const [wizPhotoUrlInput, setWizPhotoUrlInput] = useState('');
   const [wizVideoUrl, setWizVideoUrl] = useState('');
   const [wizBrochureUrl, setWizBrochureUrl] = useState('');
+  const [wizBannerImage, setWizBannerImage] = useState('');
+  const [wizMediaUploading, setWizMediaUploading] = useState(false);
+  const [wizExcelFileName, setWizExcelFileName] = useState('');
+  const [wizExcelRowsCount, setWizExcelRowsCount] = useState(0);
+  const [wizPendingExcelRows, setWizPendingExcelRows] = useState<ParsedPlotRow[]>([]);
+  const wizMainImageFileRef = useRef<HTMLInputElement>(null);
   const wizPhotoFileRef = useRef<HTMLInputElement>(null);
   const wizVideoFileRef = useRef<HTMLInputElement>(null);
+  const wizBannerFileRef = useRef<HTMLInputElement>(null);
+  const wizExcelFileRef = useRef<HTMLInputElement>(null);
 
-  // Step 3: Blueprint & Layout Visualization
+  // Step 2/3: 2D Blueprint & Layout Visualization
   const [wizLayoutUrl, setWizLayoutUrl] = useState('');
   const [wizLayoutUploading, setWizLayoutUploading] = useState(false);
   const wizLayoutFileRef = useRef<HTMLInputElement>(null);
 
-  // Reset wizard on trigger
+  // Step 3: Nearby Places
+  const [wizNearbyPlaces, setWizNearbyPlaces] = useState<ProjectNearbyItem[]>([]);
+  const [wizNewNearby, setWizNewNearby] = useState({
+    name: '',
+    category: 'Hospitals',
+    distance: '',
+    description: '',
+  });
+  const [wizCustomNearbyCategory, setWizCustomNearbyCategory] = useState('');
+
+  // Step 4: Township Infrastructure
+  const [wizInfrastructure, setWizInfrastructure] = useState<ProjectFacilityItem[]>([]);
+  const [wizCustomInfraName, setWizCustomInfraName] = useState('');
+  const [wizCustomInfraDesc, setWizCustomInfraDesc] = useState('');
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  // Reset wizard on trigger (only when starting fresh without a resume ID)
+  const [isResumingWizard, setIsResumingWizard] = useState(false);
   useEffect(() => {
-    if (newProjectWizardActive) {
+    if (newProjectWizardActive && !isResumingWizard) {
       setWizardStep(1);
       setWizProjName('');
       setWizProjLocation('');
-      setWizProjDistrict('Cuddalore');
+      setWizProjDistrict('');
       setWizProjDtcp('');
       setWizProjRera('');
-      setWizProjArea('10.0 Acres');
+      setWizProjArea('');
+      setWizSqFt('');
       setWizProjYear(new Date().getFullYear().toString());
       setWizProjStatus('Active');
       setWizProjDesc('');
-      setWizBasePricePerSqFt('1200');
-      setWizTotalPlotsEstimate('45');
+      setWizBasePricePerSqFt('');
+      setWizTotalPlotsEstimate('');
+      setWizLegalTitle('');
+      setWizLegalDetails('');
+      setWizLegalVerified(false);
       setWizNewProjectId(null);
+      setWizMainImage('');
       setWizPhotos([]);
       setWizPhotoUrlInput('');
       setWizVideoUrl('');
       setWizBrochureUrl('');
+      setWizBannerImage('');
+      setWizExcelFileName('');
+      setWizExcelRowsCount(0);
+      setWizPendingExcelRows([]);
       setWizLayoutUrl('');
+      setWizNearbyPlaces([]);
+      setWizNewNearby({ name: '', category: 'Hospitals', distance: '', description: '' });
+      setWizCustomNearbyCategory('');
+      setWizInfrastructure([]);
+      setWizCustomInfraName('');
+      setWizCustomInfraDesc('');
     }
-  }, [newProjectWizardActive]);
+    if (!newProjectWizardActive) {
+      setIsResumingWizard(false);
+    }
+  }, [newProjectWizardActive, isResumingWizard]);
+
+  const resumeIncompleteProject = (proj: Project) => {
+    setIsResumingWizard(true);
+    const step = (proj.wizardStep && proj.wizardStep >= 1 && proj.wizardStep <= 4 ? proj.wizardStep : 1) as 1 | 2 | 3 | 4;
+    setWizardStep(step);
+    setWizNewProjectId(proj.id);
+    setWizProjName(proj.name || '');
+    setWizProjLocation(proj.location || '');
+    setWizProjDistrict(proj.district || 'Cuddalore');
+    setWizProjDtcp(proj.dtcpNumber || '');
+    setWizProjRera(proj.reraNumber || '');
+    setWizProjArea(proj.totalAreaExtent || '10.0 Acres');
+    setWizSqFt(proj.defaultSqFt || '1200');
+    setWizProjYear((proj.launchYear || new Date().getFullYear()).toString());
+    setWizProjStatus((proj.status === 'Inactive' ? 'Active' : proj.status) || 'Active');
+    setWizProjDesc(proj.description || '');
+    setWizBasePricePerSqFt((proj.basePricePerSqFt || 1200).toString());
+    setWizTotalPlotsEstimate((proj.totalPlots || 45).toString());
+    setWizLegalTitle(proj.legalTitle?.title || 'Clear Title & Encumbrance Verified');
+    setWizLegalDetails(proj.legalTitle?.verificationDetails || '30-year EC & Patta verified');
+    setWizLegalVerified(Boolean(proj.legalTitle?.verified));
+    setWizMainImage(proj.masterPlanImage || '');
+    setWizPhotos((proj.gallery || []).map((g) => g.url));
+    setWizVideoUrl(proj.videoUrl || '');
+    setWizBannerImage(proj.bannerImage || proj.featuredSection?.bannerImage || '');
+    setWizLayoutUrl(proj.layoutImageUrl || proj.masterPlanImage || '');
+    setWizNearbyPlaces(proj.nearbyPlaces || []);
+    setWizInfrastructure(proj.infrastructure || []);
+    openNewProjectWizard();
+  };
 
   // Canvas click to position boundary box
   const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -268,14 +377,23 @@ export const OwnerHotspotSimulator: React.FC = () => {
     e.target.value = '';
   };
 
-  // Spreadsheet CSV import
-  const handleSpreadsheetFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Spreadsheet CSV/Excel import
+  const handleSpreadsheetFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
+    try {
+      const isExcel = /\.(xlsx|xls|ods)$/i.test(file.name);
+      let content = '';
+      if (isExcel) {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const firstSheet = workbook.SheetNames[0];
+        content = XLSX.utils.sheet_to_csv(workbook.Sheets[firstSheet]);
+      } else {
+        content = await file.text();
+      }
+
       if (content) {
         setSpreadsheetText(content);
         const { rows, fatalError } = parseCsvText(content);
@@ -289,9 +407,12 @@ export const OwnerHotspotSimulator: React.FC = () => {
         }
         setIsSpreadsheetModalOpen(true);
       }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
+    } catch (err: any) {
+      console.error('Error importing spreadsheet:', err);
+      showToast(err?.message || 'Failed to read spreadsheet file', 'error');
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const handleExecuteImport = async () => {
@@ -322,8 +443,104 @@ export const OwnerHotspotSimulator: React.FC = () => {
     await unpublishProject(activeProject.id);
   };
 
-  // ── WIZARD HANDLERS ──
-  const handleWizSaveStep1 = () => {
+  // ── 4-STEP WIZARD HANDLERS ──
+  const buildWizardProjectPayload = (
+    projId: string,
+    step: number,
+    incomplete: boolean,
+    publish: boolean
+  ): Project => {
+    const existing = projects.find((p) => p.id === projId);
+    const totalPlotsNum = parseInt(wizTotalPlotsEstimate) || (wizPendingExcelRows.length > 0 ? wizPendingExcelRows.length : existing?.totalPlots || 0);
+    const baseCostNum = parseInt(wizBasePricePerSqFt) || existing?.basePricePerSqFt || 0;
+    const coverImg =
+      wizMainImage.trim() ||
+      wizBannerImage.trim() ||
+      wizLayoutUrl.trim() ||
+      existing?.masterPlanImage ||
+      '';
+    const layoutImg = wizLayoutUrl.trim() || existing?.layoutImageUrl || '';
+
+    return {
+      ...(existing || {}),
+      id: projId,
+      name: wizProjName.trim() || 'Untitled Project',
+      location: wizProjLocation.trim() || '',
+      district: wizProjDistrict.trim() || (wizProjLocation.trim() ? `${wizProjLocation.trim()} District` : ''),
+      dtcpNumber: wizProjDtcp.trim() || '',
+      reraNumber: wizProjRera.trim() || undefined,
+      totalAreaExtent: wizProjArea.trim() || '',
+      defaultSqFt: wizSqFt.trim() || '',
+      basePricePerSqFt: baseCostNum,
+      totalPlots: totalPlotsNum,
+      launchYear: parseInt(wizProjYear) || new Date().getFullYear(),
+      status: wizProjStatus,
+      description: wizProjDesc.trim(),
+      masterPlanImage: coverImg,
+      layoutImageUrl: layoutImg,
+      bannerImage: wizBannerImage || undefined,
+      videoUrl: wizVideoUrl.trim() || undefined,
+      approvals: [
+        ...(wizProjDtcp.trim()
+          ? [
+              {
+                id: 'app-dtcp',
+                authority: 'DTCP',
+                number: wizProjDtcp.trim(),
+                description: 'Directorate of Town and Country Planning approval.',
+                verified: false,
+                visible: true,
+              },
+            ]
+          : []),
+        ...(wizProjRera.trim()
+          ? [
+              {
+                id: 'app-rera',
+                authority: 'RERA',
+                number: wizProjRera.trim(),
+                description: 'RERA registration.',
+                verified: false,
+                visible: true,
+              },
+            ]
+          : []),
+      ],
+      legalTitle: wizLegalTitle.trim() || wizLegalDetails.trim()
+        ? {
+            title: wizLegalTitle.trim() || 'Clear Title',
+            description: wizLegalDetails.trim() || 'Legal verification details.',
+            verificationDetails: wizLegalDetails.trim() || '',
+            verified: wizLegalVerified,
+            visible: true,
+          }
+        : existing?.legalTitle,
+      gallery: wizPhotos.map((url, idx) => ({
+        id: `gal-${idx}-${Date.now()}`,
+        url,
+        caption: `${wizProjName.trim() || 'Project'} Photo ${idx + 1}`,
+        featured: idx === 0,
+        order: idx + 1,
+        visible: true,
+      })),
+      nearbyPlaces: wizNearbyPlaces,
+      infrastructure: wizInfrastructure,
+      featuredSection: wizBannerImage
+        ? {
+            enabled: true,
+            heading: `Invest in ${wizProjName.trim() || 'This Layout'}`,
+            description: wizProjDesc.trim() || 'Approved residential plots.',
+            bannerImage: wizBannerImage,
+          }
+        : existing?.featuredSection,
+      isIncomplete: incomplete,
+      wizardStep: step,
+      isPublished: publish,
+      updatedAt: new Date().toISOString(),
+    };
+  };
+
+  const handleWizSaveStep1 = async () => {
     if (!wizProjName.trim()) {
       showToast('Project name is required', 'error');
       return;
@@ -332,27 +549,229 @@ export const OwnerHotspotSimulator: React.FC = () => {
       showToast('Location is required', 'error');
       return;
     }
-
-    const newId = `proj-${Date.now()}`;
-    saveProject({
-      id: newId,
-      name: wizProjName.trim(),
-      location: wizProjLocation.trim(),
-      district: wizProjDistrict.trim(),
-      dtcpNumber: wizProjDtcp.trim() || 'DTCP Sanctioned',
-      reraNumber: wizProjRera.trim() || undefined,
-      totalAreaExtent: wizProjArea.trim() || '10.0 Acres',
-      launchYear: parseInt(wizProjYear) || new Date().getFullYear(),
-      status: wizProjStatus,
-      description: wizProjDesc.trim(),
-      masterPlanImage: '/golden-city-layout.jpg',
-      layoutImageUrl: '/golden-city-layout.jpg',
-      isPublished: false,
-    });
-
-    setWizNewProjectId(newId);
+    const projId = wizNewProjectId || `proj-${Date.now()}`;
+    const payload = buildWizardProjectPayload(projId, 2, true, false);
+    saveProject(payload);
+    await updateProjectDetailsInSupabase(payload);
+    setWizNewProjectId(projId);
     setWizardStep(2);
-    showToast(`Step 1 Complete: Project "${wizProjName}" registered! Now attach media.`, 'success');
+    showToast('Step 1 saved! Now add images, video, plot Excel, 2D image & banner.', 'success');
+  };
+
+  const ensureWizProjectId = () => {
+    if (wizNewProjectId) return wizNewProjectId;
+    const generated = `proj-${Date.now()}`;
+    setWizNewProjectId(generated);
+    return generated;
+  };
+
+  const handleWizMainImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setWizMediaUploading(true);
+    try {
+      const projId = ensureWizProjectId();
+      const uploaded = await uploadProjectAssetToSupabase(projId, file, 'cover');
+      if (uploaded?.url) {
+        setWizMainImage(uploaded.url);
+        showToast('Main project image uploaded', 'success');
+      }
+    } finally {
+      setWizMediaUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleWizBannerFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setWizMediaUploading(true);
+    try {
+      const projId = ensureWizProjectId();
+      const uploaded = await uploadProjectAssetToSupabase(projId, file, 'featured');
+      if (uploaded?.url) {
+        setWizBannerImage(uploaded.url);
+        showToast('Banner image attached', 'success');
+      }
+    } finally {
+      setWizMediaUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleWizExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setWizExcelFileName(file.name);
+    try {
+      const isExcel = /\.(xlsx|xls|ods)$/i.test(file.name);
+      let content = '';
+      if (isExcel) {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const firstSheet = workbook.SheetNames[0];
+        content = XLSX.utils.sheet_to_csv(workbook.Sheets[firstSheet]);
+      } else {
+        content = await file.text();
+      }
+
+      if (!content || !content.trim()) {
+        showToast('Uploaded spreadsheet is empty', 'error');
+        return;
+      }
+
+      const { rows, fatalError } = parseCsvText(content);
+      if (fatalError) {
+        showToast(fatalError, 'error');
+        return;
+      }
+      setWizPendingExcelRows(rows);
+      setWizExcelRowsCount(rows.length);
+      if (rows.length > 0 && (!wizTotalPlotsEstimate || wizTotalPlotsEstimate === '0')) {
+        setWizTotalPlotsEstimate(rows.length.toString());
+      }
+      showToast(`Parsed ${rows.length} plots from ${file.name}`, 'success');
+    } catch (err: any) {
+      console.error('Error processing spreadsheet upload:', err);
+      showToast(err?.message || 'Failed to read spreadsheet file', 'error');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleWizSaveStep2 = async () => {
+    const projId = wizNewProjectId || `proj-${Date.now()}`;
+    if (wizPendingExcelRows.length > 0) {
+      await importSpreadsheetPlots(projId, wizPendingExcelRows);
+      setWizPendingExcelRows([]);
+    }
+    const payload = buildWizardProjectPayload(projId, 3, true, false);
+    saveProject(payload);
+    await updateProjectDetailsInSupabase(payload);
+    setWizNewProjectId(projId);
+    setWizardStep(3);
+    showToast('Step 2 saved! Now add nearby places.', 'success');
+  };
+
+  const handleWizSaveStep3 = async () => {
+    let nextNearby = wizNearbyPlaces;
+    if (wizNewNearby.name.trim() && wizNewNearby.distance.trim()) {
+      const resolvedCategory =
+        wizNewNearby.category === 'Custom'
+          ? wizCustomNearbyCategory.trim() || 'Other'
+          : wizNewNearby.category;
+      nextNearby = [
+        ...wizNearbyPlaces,
+        {
+          id: `near-${Date.now()}`,
+          name: wizNewNearby.name.trim(),
+          category: resolvedCategory,
+          distance: wizNewNearby.distance.trim(),
+          description: wizNewNearby.description.trim() || undefined,
+          icon: resolvedCategory,
+          order: wizNearbyPlaces.length + 1,
+          visible: true,
+        },
+      ];
+      setWizNearbyPlaces(nextNearby);
+      setWizNewNearby({ name: '', category: 'Hospitals', distance: '', description: '' });
+      setWizCustomNearbyCategory('');
+    }
+    const projId = wizNewProjectId || `proj-${Date.now()}`;
+    const payload = {
+      ...buildWizardProjectPayload(projId, 4, true, false),
+      nearbyPlaces: nextNearby,
+    };
+    saveProject(payload);
+    await updateProjectDetailsInSupabase(payload);
+    setWizNewProjectId(projId);
+    setWizardStep(4);
+    showToast('Step 3 saved! Now select township infrastructure.', 'success');
+  };
+
+  const handleWizSaveIncomplete = async () => {
+    if (!wizProjName.trim()) {
+      closeNewProjectWizard();
+      return;
+    }
+    const projId = wizNewProjectId || `proj-${Date.now()}`;
+    const payload = buildWizardProjectPayload(projId, wizardStep, true, false);
+    saveProject(payload);
+    closeNewProjectWizard();
+    showToast(`Saved "${wizProjName.trim()}" as Incomplete (Step ${wizardStep}/4).`, 'info');
+    updateProjectDetailsInSupabase(payload).catch((err) =>
+      console.warn('[handleWizSaveIncomplete] Supabase background note:', err)
+    );
+  };
+
+  const handleWizCompleteAndPublish = async () => {
+    if (isCompleting) return;
+    setIsCompleting(true);
+
+    try {
+      const projId = ensureWizProjectId();
+
+      // Include any custom infrastructure that was typed in the inputs
+      let finalInfra = [...wizInfrastructure];
+      if (wizCustomInfraName.trim()) {
+        finalInfra.push({
+          id: `fac-${Date.now()}`,
+          name: wizCustomInfraName.trim(),
+          description: wizCustomInfraDesc.trim(),
+          icon: 'check',
+          order: finalInfra.length + 1,
+          enabled: true,
+        });
+        setWizInfrastructure(finalInfra);
+        setWizCustomInfraName('');
+        setWizCustomInfraDesc('');
+      }
+
+      // Import any pending spreadsheet plots
+      if (wizPendingExcelRows.length > 0) {
+        try {
+          await importSpreadsheetPlots(projId, wizPendingExcelRows);
+          setWizPendingExcelRows([]);
+        } catch (plotErr) {
+          console.warn('[handleWizCompleteAndPublish] Plot import note:', plotErr);
+        }
+      }
+
+      const payload: Project = {
+        ...buildWizardProjectPayload(projId, 4, false, true),
+        infrastructure: finalInfra,
+      };
+
+      // 1. Immediately save locally to AppContext state and localStorage
+      saveProject(payload);
+      setSelectedProjectId(projId);
+
+      // 2. Immediately close wizard and navigate to Projects tab
+      closeNewProjectWizard();
+      setActiveTab('projects');
+      showToast(`Project "${payload.name}" published & added to website!`, 'success');
+
+      // 3. Sync to Supabase & backend asynchronously in the background
+      Promise.allSettled([
+        updateProjectDetailsInSupabase(payload),
+        publishProject(projId),
+      ]).then(([dbRes, pubRes]) => {
+        if (dbRes.status === 'fulfilled' && dbRes.value.success) {
+          console.log('[handleWizCompleteAndPublish] Supabase sync completed');
+        }
+      });
+    } catch (err: any) {
+      console.error('[handleWizCompleteAndPublish] Error completing project:', err);
+      // Fail-safe: ensure user isn't stuck
+      const fallbackProjId = wizNewProjectId || `proj-${Date.now()}`;
+      const fallbackPayload = buildWizardProjectPayload(fallbackProjId, 4, false, true);
+      saveProject(fallbackPayload);
+      closeNewProjectWizard();
+      setActiveTab('projects');
+      showToast('Project saved locally', 'info');
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   const handleWizAddPhotoUrl = () => {
@@ -362,27 +781,41 @@ export const OwnerHotspotSimulator: React.FC = () => {
     showToast('Photo added', 'success');
   };
 
-  const handleWizPhotoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleWizPhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const result = ev.target?.result as string;
-        if (result) setWizPhotos((prev) => [...prev, result]);
-      };
-      reader.readAsDataURL(file);
-    });
-    showToast(`${files.length} photo(s) attached`, 'success');
-    e.target.value = '';
+    if (!files || files.length === 0) return;
+    setWizMediaUploading(true);
+    try {
+      const projId = ensureWizProjectId();
+      const uploaded = await Promise.all(
+        Array.from(files).map((file) => uploadProjectAssetToSupabase(projId, file, 'gallery'))
+      );
+      const urls = uploaded.map((u) => u.url).filter(Boolean);
+      if (urls.length > 0) {
+        setWizPhotos((prev) => [...prev, ...urls]);
+        showToast(`${urls.length} image(s) uploaded`, 'success');
+      }
+    } finally {
+      setWizMediaUploading(false);
+      e.target.value = '';
+    }
   };
 
-  const handleWizVideoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleWizVideoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setWizVideoUrl(URL.createObjectURL(file));
-    showToast(`Video selected: ${file.name}`, 'success');
-    e.target.value = '';
+    setWizMediaUploading(true);
+    try {
+      const projId = ensureWizProjectId();
+      const uploaded = await uploadProjectAssetToSupabase(projId, file, 'video');
+      if (uploaded?.url) {
+        setWizVideoUrl(uploaded.url);
+        showToast(`Video uploaded: ${file.name}`, 'success');
+      }
+    } finally {
+      setWizMediaUploading(false);
+      e.target.value = '';
+    }
   };
 
   const handleWizLayoutFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -439,41 +872,75 @@ export const OwnerHotspotSimulator: React.FC = () => {
   return (
     <div className="w-full min-h-screen bg-[#F8FAFC] dark:bg-[#081B10] text-slate-900 dark:text-slate-100 flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 select-none">
       {/* ═══════════════════════════════════════════════════════════
-          UNIFIED 3-STEP NEW PROJECT REGISTRATION WIZARD OVERLAY
-          Triggered by "+ Register New Project" CTA
+          ADD PROJECT FULL-PAGE MULTI-STEP FORM (Not a Pop-up)
           ═══════════════════════════════════════════════════════════ */}
       {newProjectWizardActive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="w-full max-w-4xl mx-auto space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleWizSaveIncomplete}
+              className="h-10 px-4 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-[#113B24] inline-flex items-center gap-2 cursor-pointer shadow-xs"
+            >
+              <ArrowLeft className="w-4 h-4 text-[#15803D]" />
+              <span>Back to Projects</span>
+            </button>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-100 dark:border-[#1E5D32]/60">
+            <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-100">
               <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <h2 className="text-lg font-black text-[#113B24] flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-[#EAB308]" />
-                  New Project Registration Wizard
+                  {isResumingWizard || wizNewProjectId ? 'Setup Project' : 'Add New Project'}
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Complete 3 steps to set up inventory, media, and spatial plot visualization
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Complete all 4 steps to publish to the website, or save anytime as Incomplete
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={closeNewProjectWizard}
-                className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-[#164329] text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {wizNewProjectId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Are you sure you want to delete this incomplete draft "${wizProjName || 'Untitled Project'}"?`
+                        )
+                      ) {
+                        deleteProject(wizNewProjectId);
+                        closeNewProjectWizard();
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Delete Incomplete Draft"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Delete Draft</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleWizSaveIncomplete}
+                  className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                  title="Save as Incomplete & Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            {/* Step Indicator */}
-            <div className="flex items-center gap-0 px-6 pt-5 pb-2">
+            {/* 4-Step Indicator */}
+            <div className="flex items-center gap-0 px-6 pt-5 pb-2 overflow-x-auto">
               {[
-                { n: 1, label: 'Info & Inventory' },
-                { n: 2, label: 'Media & Tours' },
-                { n: 3, label: 'Layout Visualization' },
+                { n: 1, label: 'Main Details' },
+                { n: 2, label: 'Media & 2D' },
+                { n: 3, label: 'Nearby Places' },
+                { n: 4, label: 'Infrastructure' },
               ].map(({ n, label }, idx) => (
                 <React.Fragment key={n}>
-                  <div className="flex flex-col items-center gap-1">
+                  <div className="flex flex-col items-center gap-1 shrink-0">
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border-2 transition-all ${
                         wizardStep > n
@@ -493,9 +960,9 @@ export const OwnerHotspotSimulator: React.FC = () => {
                       {label}
                     </span>
                   </div>
-                  {idx < 2 && (
+                  {idx < 3 && (
                     <div
-                      className={`flex-1 h-0.5 mx-2 mb-4 rounded-full transition-all ${
+                      className={`flex-1 min-w-[20px] h-0.5 mx-2 mb-4 rounded-full transition-all ${
                         wizardStep > n ? 'bg-[#15803D]' : 'bg-slate-200 dark:bg-slate-700'
                       }`}
                     />
@@ -504,29 +971,29 @@ export const OwnerHotspotSimulator: React.FC = () => {
               ))}
             </div>
 
-            {/* ── STEP 1: PROJECT DETAILS & PLOT INVENTORY ── */}
+            {/* ── STEP 1: MAIN PROJECT DETAILS ── */}
             {wizardStep === 1 && (
-              <div className="p-6 space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="p-6 space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="sm:col-span-2 space-y-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300">Layout / Project Name *</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Project Name *</label>
                     <input
                       type="text"
                       value={wizProjName}
                       onChange={(e) => setWizProjName(e.target.value)}
                       placeholder="e.g. Golden City Phase 2"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300">Location / Village *</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Location / Address *</label>
                     <input
                       type="text"
                       value={wizProjLocation}
                       onChange={(e) => setWizProjLocation(e.target.value)}
                       placeholder="e.g. Vandipalayam Main Road"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
 
@@ -537,310 +1004,636 @@ export const OwnerHotspotSimulator: React.FC = () => {
                       value={wizProjDistrict}
                       onChange={(e) => setWizProjDistrict(e.target.value)}
                       placeholder="e.g. Cuddalore"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300">DTCP Approval Number</label>
-                    <input
-                      type="text"
-                      value={wizProjDtcp}
-                      onChange={(e) => setWizProjDtcp(e.target.value)}
-                      placeholder="e.g. LP/CDL/182/2023"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300">RERA Registration ID</label>
-                    <input
-                      type="text"
-                      value={wizProjRera}
-                      onChange={(e) => setWizProjRera(e.target.value)}
-                      placeholder="e.g. TN/01/Layout/0032/2023"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300">Total Acreage Extent</label>
-                    <input
-                      type="text"
-                      value={wizProjArea}
-                      onChange={(e) => setWizProjArea(e.target.value)}
-                      placeholder="e.g. 12.5 Acres"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300">Launch Year</label>
-                    <input
-                      type="number"
-                      value={wizProjYear}
-                      onChange={(e) => setWizProjYear(e.target.value)}
-                      min="2000"
-                      max="2035"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-
-                  {/* Plot Inventory Parameters */}
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300">Base Price (₹/sq.ft)</label>
-                    <input
-                      type="number"
-                      value={wizBasePricePerSqFt}
-                      onChange={(e) => setWizBasePricePerSqFt(e.target.value)}
-                      placeholder="e.g. 1200"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300">Estimated Total Plots</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-300">No. of Plots</label>
                     <input
                       type="number"
                       value={wizTotalPlotsEstimate}
                       onChange={(e) => setWizTotalPlotsEstimate(e.target.value)}
                       placeholder="e.g. 45"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Sq.Ft / Plot Size</label>
+                    <input
+                      type="text"
+                      value={wizSqFt}
+                      onChange={(e) => setWizSqFt(e.target.value)}
+                      placeholder="e.g. 1200 sq.ft"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Cost (₹ / Sq.Ft)</label>
+                    <input
+                      type="number"
+                      value={wizBasePricePerSqFt}
+                      onChange={(e) => setWizBasePricePerSqFt(e.target.value)}
+                      placeholder="e.g. 1200"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Total Land Extent</label>
+                    <input
+                      type="text"
+                      value={wizProjArea}
+                      onChange={(e) => setWizProjArea(e.target.value)}
+                      placeholder="e.g. 12.5 Acres"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Government Approval (DTCP)</label>
+                    <input
+                      type="text"
+                      value={wizProjDtcp}
+                      onChange={(e) => setWizProjDtcp(e.target.value)}
+                      placeholder="e.g. DTCP No. 182/2023"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">RERA Approval (Optional)</label>
+                    <input
+                      type="text"
+                      value={wizProjRera}
+                      onChange={(e) => setWizProjRera(e.target.value)}
+                      placeholder="e.g. TN/01/Layout/0032/2023"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Legal Title</label>
+                    <input
+                      type="text"
+                      value={wizLegalTitle}
+                      onChange={(e) => setWizLegalTitle(e.target.value)}
+                      placeholder="e.g. Clear Title & Patta Ready"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Legal Verification Details</label>
+                    <input
+                      type="text"
+                      value={wizLegalDetails}
+                      onChange={(e) => setWizLegalDetails(e.target.value)}
+                      placeholder="e.g. 30-year EC & Patta verified"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2 flex items-center gap-2">
+                    <input
+                      id="wiz-legal-verified"
+                      type="checkbox"
+                      checked={wizLegalVerified}
+                      onChange={(e) => setWizLegalVerified(e.target.checked)}
+                    />
+                    <label htmlFor="wiz-legal-verified" className="font-bold text-slate-700 dark:text-slate-300">
+                      Mark Legal Title as Admin Verified
+                    </label>
+                  </div>
+
                   <div className="sm:col-span-2 space-y-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300">Layout Description</label>
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Project Description</label>
                     <textarea
                       rows={2}
                       value={wizProjDesc}
                       onChange={(e) => setWizProjDesc(e.target.value)}
-                      placeholder="Key highlights, sweet water depth, road widths, gated security..."
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                      placeholder="Key highlights, location advantages..."
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-2">
+                <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                   <button
                     type="button"
-                    onClick={closeNewProjectWizard}
-                    className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 cursor-pointer"
+                    onClick={handleWizSaveIncomplete}
+                    className="order-2 sm:order-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs sm:text-sm font-bold hover:bg-slate-50 text-center cursor-pointer"
                   >
-                    Cancel
+                    Save as Incomplete
                   </button>
                   <button
                     type="button"
                     onClick={handleWizSaveStep1}
-                    className="px-6 py-2.5 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white text-xs font-black flex items-center gap-2 shadow-md cursor-pointer"
+                    className="order-1 sm:order-2 px-6 py-2.5 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
                   >
-                    Save &amp; Continue to Media
+                    <span className="whitespace-nowrap">Next: Media, Excel &amp; 2D</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             )}
 
-            {/* ── STEP 2: MEDIA & WALKTHROUGHS ── */}
+            {/* ── STEP 2: MAIN IMAGE, GALLERY IMAGES, VIDEO, PLOT EXCEL, 2D IMAGE & BANNER ── */}
             {wizardStep === 2 && (
-              <div className="p-6 space-y-5">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Attach site photos, entrance gate renders, drone tour video, and brochure.
-                </p>
+              <div className="p-6 space-y-4 text-xs">
+                {/* Main Project Image (Card Cover in Projects Area) */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">
+                    Main Project Image <span className="text-slate-400 font-normal">(Displays on Project Card)</span>
+                  </label>
+                  <input ref={wizMainImageFileRef} type="file" accept="image/*" className="hidden" onChange={handleWizMainImageFile} />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      value={wizMainImage}
+                      onChange={(e) => setWizMainImage(e.target.value)}
+                      placeholder="Main project cover image URL or upload"
+                      className="flex-1 p-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                    <button
+                      type="button"
+                      disabled={wizMediaUploading}
+                      onClick={() => wizMainImageFileRef.current?.click()}
+                      className="px-3.5 py-2.5 rounded-xl bg-[#15803D] text-white font-bold cursor-pointer disabled:opacity-60"
+                    >
+                      {wizMediaUploading ? 'Uploading...' : 'Upload Main Image'}
+                    </button>
+                  </div>
+                  {wizMainImage && (
+                    <img src={wizMainImage} alt="Main Project Cover" className="w-full h-32 rounded-xl object-cover border border-slate-200" />
+                  )}
+                </div>
 
-                {/* Photo URLs / Device Upload */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Site Photos &amp; Renders</label>
+                {/* Banner Image */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Featured Banner Image</label>
+                  <input ref={wizBannerFileRef} type="file" accept="image/*" className="hidden" onChange={handleWizBannerFile} />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      value={wizBannerImage}
+                      onChange={(e) => setWizBannerImage(e.target.value)}
+                      placeholder="Banner image URL or upload"
+                      className="flex-1 p-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                    <button
+                      type="button"
+                      disabled={wizMediaUploading}
+                      onClick={() => wizBannerFileRef.current?.click()}
+                      className="px-3.5 py-2.5 rounded-xl bg-[#113B24] text-white font-bold cursor-pointer disabled:opacity-60"
+                    >
+                      Upload Banner
+                    </button>
+                  </div>
+                  {wizBannerImage && (
+                    <img src={wizBannerImage} alt="Banner" className="w-full h-28 rounded-xl object-cover border border-slate-200" />
+                  )}
+                </div>
+
+                {/* Project Images (Multiple) */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">
+                    Plot & Project Gallery Images <span className="text-slate-400 font-normal">(Multiple images supported)</span>
+                  </label>
                   <div className="flex gap-2">
                     <input
                       type="url"
                       value={wizPhotoUrlInput}
                       onChange={(e) => setWizPhotoUrlInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleWizAddPhotoUrl()}
                       placeholder="https://... (photo URL)"
-                      className="flex-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="flex-1 p-2.5 rounded-xl border border-slate-200 bg-slate-50"
                     />
                     <button
                       type="button"
                       onClick={handleWizAddPhotoUrl}
-                      className="px-4 py-2.5 rounded-xl bg-[#15803D] text-white text-xs font-bold cursor-pointer hover:bg-[#166534]"
+                      className="px-4 py-2.5 rounded-xl bg-[#15803D] text-white font-bold cursor-pointer"
                     >
                       Add
                     </button>
                   </div>
-
-                  <input
-                    ref={wizPhotoFileRef}
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleWizPhotoFile}
-                  />
+                  <input ref={wizPhotoFileRef} type="file" multiple accept="image/*" className="hidden" onChange={handleWizPhotoFile} />
                   <button
                     type="button"
+                    disabled={wizMediaUploading}
                     onClick={() => wizPhotoFileRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-emerald-500 transition-colors cursor-pointer text-xs font-bold"
+                    className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-slate-300 text-slate-600 font-bold hover:border-emerald-500 cursor-pointer disabled:opacity-60"
                   >
                     <Upload className="w-4 h-4" />
-                    Upload site photos from device
+                    <span>{wizMediaUploading ? 'Uploading images...' : 'Upload multiple plot/project images'}</span>
+                  </button>
+                  {wizPhotos.length > 0 && (
+                    <div className="grid grid-cols-4 gap-2 pt-1">
+                      {wizPhotos.map((url, idx) => (
+                        <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-slate-200">
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setWizPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Plot / Project Video */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Plot / Project Video</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={wizVideoUrl}
+                      onChange={(e) => setWizVideoUrl(e.target.value)}
+                      placeholder="YouTube / MP4 video URL or upload"
+                      className="flex-1 p-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                    <input ref={wizVideoFileRef} type="file" accept="video/*" className="hidden" onChange={handleWizVideoFile} />
+                    <button
+                      type="button"
+                      disabled={wizMediaUploading}
+                      onClick={() => wizVideoFileRef.current?.click()}
+                      className="px-3.5 py-2.5 rounded-xl border border-slate-200 font-bold text-slate-700 cursor-pointer disabled:opacity-60"
+                    >
+                      {wizMediaUploading ? 'Uploading...' : 'Upload Video'}
+                    </button>
+                  </div>
+                  {wizVideoUrl && !wizVideoUrl.includes('youtube.com') && !wizVideoUrl.includes('youtu.be') && (
+                    <video src={wizVideoUrl} controls className="w-full h-40 rounded-xl bg-black border border-slate-200" />
+                  )}
+                </div>
+
+                {/* Plot Detail Excel / CSV */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Plot Detail Excel / CSV</label>
+                  <input ref={wizExcelFileRef} type="file" accept=".csv,.txt,.tsv,.xlsx,.xls,.ods" className="hidden" onChange={handleWizExcelUpload} />
+                  <button
+                    type="button"
+                    onClick={() => wizExcelFileRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-[#CA8A04] bg-[#fff6df]/60 text-[#8b6a1a] font-bold cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>
+                      {wizExcelFileName
+                        ? `${wizExcelFileName} (${wizExcelRowsCount} plots ready)`
+                        : 'Upload Plot Details Spreadsheet (.csv / Excel)'}
+                    </span>
                   </button>
                 </div>
 
-                {wizPhotos.length > 0 && (
-                  <div className="grid grid-cols-4 gap-2">
-                    {wizPhotos.map((url, idx) => (
-                      <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-slate-200">
-                        <img src={url} alt="" className="w-full h-full object-cover" />
+                {/* 2D Layout Image */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">2D Master Layout Image</label>
+                  <input ref={wizLayoutFileRef} type="file" accept="image/*" className="hidden" onChange={handleWizLayoutFileUpload} />
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={wizLayoutUrl}
+                      onChange={(e) => setWizLayoutUrl(e.target.value)}
+                      placeholder="2D layout image URL or upload"
+                      className="flex-1 p-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => wizLayoutFileRef.current?.click()}
+                      className="px-3.5 py-2.5 rounded-xl bg-[#15803D] text-white font-bold cursor-pointer"
+                    >
+                      {wizLayoutUploading ? 'Uploading...' : 'Upload 2D'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2 sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setWizardStep(1)}
+                      className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 text-center cursor-pointer text-xs sm:text-sm"
+                    >
+                      ← Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleWizSaveIncomplete}
+                      className="flex-1 sm:hidden px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 font-bold hover:bg-amber-100 text-center cursor-pointer text-xs"
+                    >
+                      Save Incomplete
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleWizSaveIncomplete}
+                      className="hidden sm:inline-flex px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 font-bold hover:bg-amber-100 cursor-pointer text-xs sm:text-sm"
+                    >
+                      Save Incomplete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleWizSaveStep2}
+                      className="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white font-black flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all text-xs sm:text-sm"
+                    >
+                      <span className="whitespace-nowrap">Next: Nearby Places</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── STEP 3: NEARBY PLACES & DETAILS ── */}
+            {wizardStep === 3 && (
+              <div className="p-6 space-y-4 text-xs">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <span className="font-bold text-[#113B24] block">Add Nearby Place</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={wizNewNearby.name}
+                      onChange={(e) => setWizNewNearby((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="Place name *"
+                      className="h-9 px-2.5 rounded-lg border border-slate-200 bg-white"
+                    />
+                    <select
+                      value={wizNewNearby.category}
+                      onChange={(e) => setWizNewNearby((p) => ({ ...p, category: e.target.value }))}
+                      className="h-9 px-2.5 rounded-lg border border-slate-200 bg-white"
+                    >
+                      {WIZ_NEARBY_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                      <option value="Custom">Custom...</option>
+                    </select>
+                  </div>
+                  {wizNewNearby.category === 'Custom' && (
+                    <input
+                      type="text"
+                      value={wizCustomNearbyCategory}
+                      onChange={(e) => setWizCustomNearbyCategory(e.target.value)}
+                      placeholder="Enter custom category * (e.g. Temple, IT Park, Beach)"
+                      className="w-full h-9 px-2.5 rounded-lg border border-emerald-300 bg-white"
+                    />
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={wizNewNearby.distance}
+                      onChange={(e) => setWizNewNearby((p) => ({ ...p, distance: e.target.value }))}
+                      placeholder="Distance (e.g. 2.5 km) *"
+                      className="h-9 px-2.5 rounded-lg border border-slate-200 bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={wizNewNearby.description}
+                      onChange={(e) => setWizNewNearby((p) => ({ ...p, description: e.target.value }))}
+                      placeholder="Details / description"
+                      className="h-9 px-2.5 rounded-lg border border-slate-200 bg-white"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!wizNewNearby.name.trim() || !wizNewNearby.distance.trim()) {
+                        showToast('Place name and distance are required', 'error');
+                        return;
+                      }
+                      if (wizNewNearby.category === 'Custom' && !wizCustomNearbyCategory.trim()) {
+                        showToast('Please enter a custom category name', 'error');
+                        return;
+                      }
+                      const resolvedCategory =
+                        wizNewNearby.category === 'Custom'
+                          ? wizCustomNearbyCategory.trim()
+                          : wizNewNearby.category;
+                      setWizNearbyPlaces((prev) => [
+                        ...prev,
+                        {
+                          id: `near-${Date.now()}`,
+                          name: wizNewNearby.name.trim(),
+                          category: resolvedCategory,
+                          distance: wizNewNearby.distance.trim(),
+                          description: wizNewNearby.description.trim() || undefined,
+                          icon: resolvedCategory,
+                          order: prev.length + 1,
+                          visible: true,
+                        },
+                      ]);
+                      setWizNewNearby({ name: '', category: 'Hospitals', distance: '', description: '' });
+                      setWizCustomNearbyCategory('');
+                    }}
+                    className="h-9 px-4 rounded-lg bg-[#113B24] text-white font-bold cursor-pointer"
+                  >
+                    + Add Place
+                  </button>
+                </div>
+
+                {wizNearbyPlaces.length > 0 && (
+                  <div className="space-y-2 max-h-44 overflow-y-auto">
+                    {wizNearbyPlaces.map((pl) => (
+                      <div key={pl.id} className="p-2.5 rounded-xl border border-slate-200 flex items-center justify-between">
+                        <div>
+                          <strong className="text-[#113B24] block">{pl.name}</strong>
+                          <span className="text-slate-500">
+                            {pl.category} · {pl.distance}
+                            {pl.description ? ` · ${pl.description}` : ''}
+                          </span>
+                        </div>
                         <button
                           type="button"
-                          onClick={() => setWizPhotos((prev) => prev.filter((_, i) => i !== idx))}
-                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer"
+                          onClick={() => setWizNearbyPlaces((prev) => prev.filter((x) => x.id !== pl.id))}
+                          className="p-1 text-red-600 cursor-pointer"
                         >
-                          <X className="w-3 h-3" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Drone Tour Video */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Drone Tour / Video Walkthrough</label>
-                  <input
-                    type="url"
-                    value={wizVideoUrl}
-                    onChange={(e) => setWizVideoUrl(e.target.value)}
-                    placeholder="https://youtube.com/watch?v=... or MP4 URL"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                  <input
-                    ref={wizVideoFileRef}
-                    type="file"
-                    accept="video/*"
-                    className="hidden"
-                    onChange={handleWizVideoFile}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => wizVideoFileRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-slate-300 text-slate-500 text-xs font-bold hover:text-emerald-600 cursor-pointer"
-                  >
-                    <Video className="w-4 h-4" />
-                    Upload video file
-                  </button>
-                </div>
+                <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2 sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setWizardStep(2)}
+                      className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 text-center cursor-pointer text-xs sm:text-sm"
+                    >
+                      ← Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleWizSaveIncomplete}
+                      className="flex-1 sm:hidden px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 font-bold hover:bg-amber-100 text-center cursor-pointer text-xs"
+                    >
+                      Save Incomplete
+                    </button>
+                  </div>
 
-                {/* Master Brochure PDF */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Brochure PDF Link (Optional)</label>
-                  <input
-                    type="url"
-                    value={wizBrochureUrl}
-                    onChange={(e) => setWizBrochureUrl(e.target.value)}
-                    placeholder="https://... brochure PDF URL"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setWizardStep(1)}
-                    className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 cursor-pointer"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWizardStep(3)}
-                    className="px-6 py-2.5 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white text-xs font-black flex items-center gap-2 shadow-md cursor-pointer"
-                  >
-                    Next: Blueprint &amp; Layout
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleWizSaveIncomplete}
+                      className="hidden sm:inline-flex px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 font-bold hover:bg-amber-100 cursor-pointer text-xs sm:text-sm"
+                    >
+                      Save Incomplete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleWizSaveStep3}
+                      className="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white font-black flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all text-xs sm:text-sm"
+                    >
+                      <span className="whitespace-nowrap">Next: Infrastructure</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* ── STEP 3: BLUEPRINT & LAYOUT VISUALIZATION ── */}
-            {wizardStep === 3 && (
-              <div className="p-6 space-y-5">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Upload the official sanctioned master plan blueprint image (JPG or PNG). You will immediately be transitioned into the visual placement studio to calibrate plot coordinates.
-                </p>
-
+            {/* ── STEP 4: TOWNSHIP INFRASTRUCTURE & PUBLISH ── */}
+            {wizardStep === 4 && (
+              <div className="p-6 space-y-4 text-xs">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sanctioned Master Plan Blueprint</label>
-                  <input
-                    ref={wizLayoutFileRef}
-                    type="file"
-                    accept="image/*,.pdf"
-                    className="hidden"
-                    onChange={handleWizLayoutFileUpload}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => wizLayoutFileRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer text-xs font-bold"
-                  >
-                    {wizLayoutUploading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                    <span>{wizLayoutUploading ? 'Uploading blueprint...' : 'Select blueprint image file (JPG, PNG)'}</span>
-                  </button>
-                </div>
-
-                <div className="text-xs text-slate-400 text-center">— or paste direct image URL —</div>
-
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={wizLayoutUrl}
-                    onChange={(e) => setWizLayoutUrl(e.target.value)}
-                    placeholder="https://... (direct blueprint image link)"
-                    className="flex-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#112F1C] text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleWizLayoutUrlSave}
-                    disabled={wizLayoutUploading}
-                    className="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold cursor-pointer hover:bg-slate-700 disabled:opacity-50"
-                  >
-                    Save URL
-                  </button>
-                </div>
-
-                {wizLayoutUrl && (
-                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 max-h-40">
-                    <img src={wizLayoutUrl} alt="Blueprint preview" className="w-full h-full object-contain bg-slate-100 dark:bg-slate-900" />
+                  <span className="font-bold text-[#113B24] block">Select Township Infrastructure</span>
+                  <div className="flex flex-wrap gap-2">
+                    {PREDEFINED_INFRA_OPTIONS.map((opt) => {
+                      const exists = wizInfrastructure.some((f) => f.name.toLowerCase() === opt.toLowerCase());
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            if (exists) {
+                              setWizInfrastructure((prev) =>
+                                prev.filter((f) => f.name.toLowerCase() !== opt.toLowerCase())
+                              );
+                            } else {
+                              setWizInfrastructure((prev) => [
+                                ...prev,
+                                {
+                                  id: `fac-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                  name: opt,
+                                  description: '',
+                                  icon: 'check',
+                                  order: prev.length + 1,
+                                  enabled: true,
+                                },
+                              ]);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-full font-bold border cursor-pointer ${
+                            exists
+                              ? 'bg-[#113B24] text-white border-[#113B24]'
+                              : 'bg-white text-[#113B24] border-slate-200 hover:border-[#15803D]'
+                          }`}
+                        >
+                          {exists ? '✓ ' : '+ '}
+                          {opt}
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-[#1E5D32]/60">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <span className="font-bold text-[#113B24] block">Add Custom Facility</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={wizCustomInfraName}
+                      onChange={(e) => setWizCustomInfraName(e.target.value)}
+                      placeholder="Facility name (e.g. Solar Street Lights)"
+                      className="h-9 px-3 rounded-xl border border-slate-200 bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={wizCustomInfraDesc}
+                      onChange={(e) => setWizCustomInfraDesc(e.target.value)}
+                      placeholder="Optional description"
+                      className="h-9 px-3 rounded-xl border border-slate-200 bg-white"
+                    />
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setWizardStep(2)}
-                    className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 cursor-pointer"
+                    onClick={() => {
+                      if (!wizCustomInfraName.trim()) return;
+                      setWizInfrastructure((prev) => [
+                        ...prev,
+                        {
+                          id: `fac-${Date.now()}`,
+                          name: wizCustomInfraName.trim(),
+                          description: wizCustomInfraDesc.trim(),
+                          icon: 'check',
+                          order: prev.length + 1,
+                          enabled: true,
+                        },
+                      ]);
+                      setWizCustomInfraName('');
+                      setWizCustomInfraDesc('');
+                    }}
+                    className="h-9 px-4 rounded-xl bg-[#113B24] hover:bg-[#15803D] text-white font-bold cursor-pointer transition-colors"
                   >
-                    ← Back
+                    + Add Facility
                   </button>
+                </div>
 
-                  <div className="flex items-center gap-2">
+                <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2 sm:w-auto">
                     <button
                       type="button"
-                      onClick={handleWizFinishAndOpenStudio}
-                      className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-[#113B24] hover:bg-[#164329] text-white text-xs font-black flex items-center justify-center gap-2 shadow-sm border border-[#EAB308]/60 cursor-pointer"
+                      onClick={() => setWizardStep(3)}
+                      disabled={isCompleting}
+                      className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 text-center cursor-pointer text-xs sm:text-sm"
                     >
-                      <Layers className="w-4 h-4 text-[#EAB308]" />
-                      <span>Open Boundary Studio</span>
+                      ← Back
                     </button>
-
                     <button
                       type="button"
-                      onClick={handleWizSaveAndPublish}
-                      className="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#15803D] to-[#113B24] text-white text-xs font-black flex items-center justify-center gap-2 shadow-md cursor-pointer hover:brightness-110"
+                      onClick={handleWizSaveIncomplete}
+                      disabled={isCompleting}
+                      className="flex-1 sm:hidden px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 font-bold hover:bg-amber-100 text-center cursor-pointer text-xs"
                     >
-                      <Globe className="w-4 h-4 text-[#EAB308]" />
-                      <span>Save &amp; Publish Live</span>
+                      Save Incomplete
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleWizSaveIncomplete}
+                      disabled={isCompleting}
+                      className="hidden sm:inline-flex px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 font-bold hover:bg-amber-100 cursor-pointer text-xs sm:text-sm"
+                    >
+                      Save Incomplete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleWizCompleteAndPublish}
+                      disabled={isCompleting}
+                      className="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-[#113B24] hover:bg-[#15803D] disabled:opacity-60 text-white font-black flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all text-xs sm:text-sm"
+                    >
+                      {isCompleting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-[#EAB308]" />
+                          <span className="whitespace-nowrap">Publishing Project...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="w-4 h-4 text-[#EAB308]" />
+                          <span className="whitespace-nowrap">Complete &amp; Add to Website</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -851,155 +1644,180 @@ export const OwnerHotspotSimulator: React.FC = () => {
       )}
 
       {/* ═══════════════════════════════════════════════════════════
-          MODE A: DEFAULT LANDING — PROJECTS VISUALIZATION LIST
+          MODE A: DEFAULT LANDING — ADD PROJECT & EXISTING PROJECT CARDS
           ═══════════════════════════════════════════════════════════ */}
-      {plotManagementMode === 'list' && (
-        <div className="space-y-6">
-          {/* Top Command Action Bar */}
-          <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {plotManagementMode === 'list' && !newProjectWizardActive && (
+        <div className="space-y-5">
+          {/* Top Action Bar: + Add Project */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="p-2 rounded-xl bg-[#15803D]/10 text-[#15803D] dark:text-emerald-400">
-                  <Sliders className="w-5 h-5" />
-                </span>
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                  Plot Management · Visualization Command Center
-                </h1>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Spatial command center for layout blueprints, boundary calibration, CAD schematics, and live parcel publishing.
+              <h2 className="text-base font-black text-[#113B24]">Projects</h2>
+              <p className="text-xs text-slate-500">
+                Existing projects and incomplete drafts
               </p>
             </div>
-
-            {/* Top Action Bar: Prominent "+ Register New Project" CTA */}
             <button
               type="button"
               onClick={openNewProjectWizard}
-              className="min-h-[44px] px-5 py-2.5 bg-gradient-to-r from-[#15803D] via-[#166534] to-[#113B24] hover:brightness-110 active:scale-[0.98] text-white text-xs sm:text-sm font-black rounded-xl flex items-center justify-center gap-2 shadow-md border border-[#EAB308]/40 transition-all cursor-pointer whitespace-nowrap"
+              className="min-h-[42px] px-5 py-2.5 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white text-xs sm:text-sm font-black inline-flex items-center justify-center gap-2 shadow-sm cursor-pointer"
             >
               <Plus className="w-4 h-4 text-[#EAB308]" />
-              <span>Register New Project</span>
+              <span>Add Project</span>
             </button>
           </div>
 
-          {/* List / Grid of All Registered Projects */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-[#15803D]" />
-                All Layout Projects ({projects.length})
-              </h2>
-              <span className="text-[11px] text-slate-400">Select "Edit Visualization" to calibrate master plan boundaries</span>
-            </div>
+          {/* Search Bar with Search Button + Enter */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setSearchQuery(searchInput);
+              }}
+              className="flex items-center gap-2 w-full"
+            >
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search project by name or address..."
+                  value={searchInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSearchInput(val);
+                    if (!val.trim()) setSearchQuery('');
+                  }}
+                  className="w-full h-10 text-xs sm:text-sm pl-10 pr-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <button
+                type="submit"
+                className="h-10 px-4 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white text-xs font-bold inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Search</span>
+              </button>
+            </form>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {projects.map((proj) => {
-                const projPlots = properties.filter((p) => p.projectId === proj.id);
-                const mappedPlotsCount = projPlots.filter(
-                  (p) =>
-                    p.boundary &&
-                    typeof p.boundary.x === 'number' &&
-                    typeof p.boundary.y === 'number' &&
-                    p.boundary.width > 0 &&
-                    p.boundary.height > 0
-                ).length;
-                const totalPlotsCount = projPlots.length;
-                const percentMapped = totalPlotsCount > 0 ? Math.round((mappedPlotsCount / totalPlotsCount) * 100) : 0;
-                const isFullyMapped = totalPlotsCount > 0 && mappedPlotsCount === totalPlotsCount;
-
+          {/* Existing Projects: Each Project in Separate Card with Banner Image, Name & Address */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {projects
+              .filter((p) => {
+                if (!searchQuery.trim()) return true;
+                const q = searchQuery.toLowerCase().trim();
+                return (
+                  p.name.toLowerCase().includes(q) ||
+                  p.location.toLowerCase().includes(q) ||
+                  p.district.toLowerCase().includes(q)
+                );
+              })
+              .map((proj) => {
+                const isIncomplete = Boolean(proj.isIncomplete) || !proj.isPublished;
+                const cardBanner =
+                  proj.bannerImage ||
+                  proj.featuredSection?.bannerImage ||
+                  proj.masterPlanImage ||
+                  '/golden-city-layout.jpg';
                 return (
                   <div
                     key={proj.id}
-                    className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-4"
+                    className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
                   >
-                    <div className="space-y-3">
-                      {/* Blueprint Thumbnail */}
-                      <div className="w-full h-36 rounded-2xl overflow-hidden bg-slate-100 dark:bg-[#112F1C] border border-slate-200 dark:border-[#1E5D32] relative group">
-                        {proj.layoutImageUrl || proj.masterPlanImage ? (
-                          <img
-                            src={proj.layoutImageUrl || proj.masterPlanImage}
-                            alt={proj.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs">
-                            No blueprint image uploaded
-                          </div>
-                        )}
-
-                        {/* Status Badge */}
-                        <div className="absolute top-2.5 right-2.5">
-                          {proj.isPublished ? (
-                            <span className="px-2.5 py-1 rounded-full bg-emerald-950/80 backdrop-blur-md text-emerald-300 border border-emerald-500/50 text-[10px] font-black flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                              LIVE PUBLISHED
-                            </span>
+                    <div>
+                      {/* Project Banner Image */}
+                      <div className="relative h-40 w-full bg-[#113B24] overflow-hidden">
+                        <img
+                          src={cardBanner}
+                          alt={proj.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                          {isIncomplete ? (
+                            <>
+                              <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase shadow-xs">
+                                Incomplete{proj.wizardStep ? ` · Step ${proj.wizardStep}/4` : ''}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (
+                                    window.confirm(
+                                      `Are you sure you want to delete the incomplete project "${proj.name}"?`
+                                    )
+                                  ) {
+                                    deleteProject(proj.id);
+                                  }
+                                }}
+                                className="w-7 h-7 rounded-full bg-red-600/90 hover:bg-red-700 text-white flex items-center justify-center shadow-xs cursor-pointer transition-colors"
+                                title="Delete Incomplete Project"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
                           ) : (
-                            <span className="px-2.5 py-1 rounded-full bg-amber-950/80 backdrop-blur-md text-amber-300 border border-amber-500/50 text-[10px] font-black">
-                              DRAFT
+                            <span className="px-2.5 py-1 rounded-full bg-[#113B24]/90 text-white border border-white/20 text-[10px] font-black uppercase shadow-xs">
+                              Published
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {/* Title & Location */}
-                      <div>
-                        <h3 className="text-base font-black text-slate-900 dark:text-white">
+                      {/* Project Name & Address */}
+                      <div className="p-4 space-y-1">
+                        <h3 className="text-base font-extrabold text-[#113B24]">
                           {proj.name}
                         </h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span>{proj.location} · {proj.dtcpNumber || 'DTCP Sanctioned'}</span>
-                        </p>
-                      </div>
-
-                      {/* Mapping Health Indicator */}
-                      <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#112F1C] border border-slate-200/60 dark:border-[#1E5D32]/60 space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-slate-600 dark:text-slate-300">Mapping Health:</span>
-                          <span
-                            className={`font-black ${
-                              isFullyMapped
-                                ? 'text-[#15803D] dark:text-emerald-400'
-                                : mappedPlotsCount > 0
-                                ? 'text-[#CA8A04] dark:text-[#EAB308]'
-                                : 'text-slate-400'
-                            }`}
-                          >
-                            {mappedPlotsCount} / {totalPlotsCount} Plots Mapped ({percentMapped}%)
+                        <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-[#15803D] shrink-0" />
+                          <span>
+                            {proj.location}, {proj.district}
                           </span>
-                        </div>
-
-                        {/* Progress Bar */}
-                        <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              isFullyMapped
-                                ? 'bg-[#15803D]'
-                                : mappedPlotsCount > 0
-                                ? 'bg-amber-500'
-                                : 'bg-slate-400'
-                            }`}
-                            style={{ width: `${percentMapped}%` }}
-                          />
-                        </div>
+                        </p>
                       </div>
                     </div>
 
-                    {/* Primary Action Button: "Edit Visualization" */}
-                    <button
-                      type="button"
-                      onClick={() => openVisualizeProject(proj.id)}
-                      className="w-full min-h-[42px] px-4 py-2.5 rounded-xl bg-[#15803D] hover:bg-[#166534] active:scale-[0.98] text-white font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer border border-[#CA8A04]/40"
-                    >
-                      <Layers className="w-4 h-4 text-[#EAB308]" />
-                      <span>Edit Visualization</span>
-                      <ArrowRight className="w-3.5 h-3.5 opacity-80" />
-                    </button>
+                    <div className="p-4 pt-0">
+                      {isIncomplete ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => resumeIncompleteProject(proj)}
+                            className="flex-1 h-10 px-4 rounded-xl bg-[#CA8A04] hover:bg-[#a16207] text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"
+                          >
+                            Resume Setup
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Are you sure you want to delete the incomplete project "${proj.name}"?`
+                                )
+                              ) {
+                                deleteProject(proj.id);
+                              }
+                            }}
+                            className="h-10 px-3.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                            title="Delete Incomplete Project"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openVisualizeProject(proj.id)}
+                          className="w-full h-10 px-4 rounded-xl bg-[#edf4ee] hover:bg-[#dceadd] text-[#113B24] text-xs font-bold cursor-pointer"
+                        >
+                          Open Studio
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
-            </div>
           </div>
         </div>
       )}
@@ -1119,7 +1937,7 @@ export const OwnerHotspotSimulator: React.FC = () => {
                 type="file"
                 ref={spreadsheetInputRef}
                 onChange={handleSpreadsheetFileSelect}
-                accept=".csv,.txt,.tsv"
+                accept=".csv,.txt,.tsv,.xlsx,.xls,.ods"
                 className="hidden"
               />
 

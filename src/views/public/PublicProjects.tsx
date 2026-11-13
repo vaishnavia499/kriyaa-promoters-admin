@@ -37,6 +37,7 @@ import {
   ShoppingBag,
   FolderOpen,
   Compass,
+  Video,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Project, Property, LayoutDisplayMode, PropertyStatus, PublicTab } from '../../types';
@@ -222,17 +223,22 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
   };
 
   const getProjectCardStats = (projectId: string) => {
+    const proj = projects.find((p) => p.id === projectId);
     const pPlots = properties.filter((p) => p.projectId === projectId);
-    const available = pPlots.filter((p) => p.status === 'Available').length;
+    const available = pPlots.length > 0
+      ? pPlots.filter((p) => p.status === 'Available').length
+      : (proj?.availablePlots ?? proj?.totalPlots ?? 45);
     const reserved = pPlots.filter((p) => p.status === 'Reserved').length;
-    const sold = pPlots.filter((p) => p.status === 'Sold').length;
-    const lowestPrice = pPlots.reduce(
-      (min, p) => (p.totalPrice < min ? p.totalPrice : min),
-      pPlots[0]?.totalPrice || 2500000
-    );
+    const sold = pPlots.length > 0
+      ? pPlots.filter((p) => p.status === 'Sold').length
+      : (proj?.soldPlots ?? 0);
+    const total = pPlots.length > 0 ? pPlots.length : (proj?.totalPlots ?? 45);
+    const lowestPrice = pPlots.length > 0
+      ? pPlots.reduce((min, p) => (p.totalPrice < min ? p.totalPrice : min), pPlots[0]?.totalPrice || 2500000)
+      : (proj?.basePricePerSqFt ? proj.basePricePerSqFt * (Number(proj.defaultSqFt) || 1200) : 1800000);
 
     return {
-      total: pPlots.length,
+      total,
       available,
       reserved,
       sold,
@@ -240,12 +246,21 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
     };
   };
 
-  const heroMediaImages = useMemo(() => [
-    viewingProject?.masterPlanImage || 'https://images.unsplash.com/photo-1524813686514-a57563d77d61?auto=format&fit=crop&w=1400&q=85',
-    'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1400&q=85',
-    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=85',
-    'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1400&q=85',
-  ], [viewingProject]);
+  const heroMediaImages = useMemo(() => {
+    const galleryUrls = viewingProject?.gallery?.map((g) => g.url).filter(Boolean) || [];
+    if (galleryUrls.length > 0) {
+      return [
+        ...(viewingProject?.masterPlanImage ? [viewingProject.masterPlanImage] : []),
+        ...galleryUrls,
+      ];
+    }
+    return [
+      viewingProject?.masterPlanImage || 'https://images.unsplash.com/photo-1524813686514-a57563d77d61?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1400&q=85',
+    ];
+  }, [viewingProject]);
 
   const handleDownloadBrochure = () => {
     showToast('Downloading Golden City Master Brochure PDF & Sanctioned Map...', 'info');
@@ -456,7 +471,7 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                       AVAILABLE SIZES
                     </span>
                     <div className="text-base sm:text-xl font-black text-white">
-                      800 – 2,400 <span className="text-xs text-slate-300 font-normal">sq.ft</span>
+                      {viewingProject.defaultSqFt ? `${viewingProject.defaultSqFt} sq.ft` : '800 – 2,400 sq.ft'}
                     </div>
                   </div>
                 </div>
@@ -474,12 +489,12 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                         Project Overview
                       </h3>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        KRIYAA PROMOTERS FLAGSHIP COLONY
+                        KRIYAA PROMOTERS RESIDENTIAL TOWNSHIP
                       </p>
                     </div>
                   </div>
                   <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold shrink-0">
-                    Phase 1: ACTIVE
+                    {viewingProject.status || 'Active'}
                   </span>
                 </div>
 
@@ -490,10 +505,12 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                       TOTAL PLOTS
                     </span>
                     <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-0.5 block">
-                      45 Demarcated Plots
+                      {viewingProject.totalPlots || projectPlots.length || 45} Demarcated Plots
                     </span>
                     <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold block mt-0.5">
-                      Phase 1 (Limited Units)
+                      {projectPlots.filter((p) => p.status === 'Available').length > 0
+                        ? `${projectPlots.filter((p) => p.status === 'Available').length} Available Units`
+                        : 'Sanctioned Scheme'}
                     </span>
                   </div>
 
@@ -502,7 +519,7 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                       BASE PRICE
                     </span>
                     <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-0.5 block">
-                      ₹1,200 / Sq.Ft
+                      ₹{viewingProject.basePricePerSqFt ? Number(viewingProject.basePricePerSqFt).toLocaleString() : '1,200'} / Sq.Ft
                     </span>
                     <span className="text-[11px] text-amber-600 dark:text-[#EAB308] font-bold block mt-0.5">
                       Approved Govt Valuation
@@ -514,10 +531,10 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                       TOTAL LAYOUT AREA
                     </span>
                     <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-0.5 block">
-                      12.5 Gated Acres
+                      {viewingProject.totalAreaExtent || '10.0 Acres'}
                     </span>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block mt-0.5">
-                      Wide tar roads & green resv
+                      Wide roads & parks
                     </span>
                   </div>
 
@@ -526,10 +543,10 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                       PLOT SIZES AVAILABLE
                     </span>
                     <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-0.5 block">
-                      800 – 2,400 Sq.Ft
+                      {viewingProject.defaultSqFt ? `${viewingProject.defaultSqFt} Sq.Ft typical` : '800 – 2,400 Sq.Ft'}
                     </span>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block mt-0.5">
-                      1.8 – 5.5 Cents Units
+                      Ready for Construction
                     </span>
                   </div>
                 </div>
@@ -537,9 +554,145 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
                 {/* Bottom Strip */}
                 <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-center gap-2.5 text-xs font-bold">
                   <CheckCircle2 className="w-4 h-4 text-amber-600 dark:text-[#EAB308] shrink-0" />
-                  <span>Project Type: DTCP & RERA Approved Residential Plotted Colony</span>
+                  <span>
+                    Project Type: {viewingProject.dtcpNumber || 'DTCP'}
+                    {viewingProject.reraNumber ? ` & ${viewingProject.reraNumber}` : ''} Residential Township
+                  </span>
                 </div>
               </div>
+
+              {/* B2. FEATURED PROJECT BANNER (Admin-Controlled) */}
+              {viewingProject.featuredSection?.enabled && (
+                <div className="rounded-3xl overflow-hidden bg-[#113B24] text-white border border-[#CA8A04]/40 shadow-lg">
+                  {viewingProject.featuredSection.bannerImage && (
+                    <div className="h-44 sm:h-52 w-full overflow-hidden">
+                      <img
+                        src={viewingProject.featuredSection.bannerImage}
+                        alt={viewingProject.featuredSection.heading}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <div className="p-5 sm:p-6 space-y-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#CA8A04]/20 border border-[#CA8A04]/50 text-[#EAB308] text-[10px] font-bold uppercase tracking-wider">
+                      <Sparkles className="w-3 h-3" /> Featured Project
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-black text-white">
+                      {viewingProject.featuredSection.heading}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed">
+                      {viewingProject.featuredSection.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* B3. GOVERNMENT APPROVALS (Admin-Controlled, Points Format) */}
+              {viewingProject.approvals && viewingProject.approvals.filter((a) => a.visible).length > 0 && (
+                <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-md space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                      Government Approvals
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold">
+                      {viewingProject.approvals.filter((a) => a.visible).length} Listed
+                    </span>
+                  </div>
+                  <ul className="space-y-2.5">
+                    {viewingProject.approvals
+                      .filter((a) => a.visible)
+                      .map((item) => (
+                        <li
+                          key={item.id}
+                          className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#112F1C]/70 border border-slate-100 dark:border-[#1E5D32]/50 flex items-start justify-between gap-3"
+                        >
+                          <div className="flex items-start gap-2.5 min-w-0">
+                            <span className="w-2 h-2 rounded-full bg-[#15803D] mt-1.5 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                                  {item.authority}: {item.number}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    item.verified
+                                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                                  }`}
+                                >
+                                  {item.verified ? 'Verified' : 'Pending Verification'}
+                                </span>
+                              </div>
+                              {item.description && (
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                  {item.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {item.documentUrl && (
+                            <a
+                              href={item.documentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2.5 py-1 rounded-lg border border-emerald-600/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold shrink-0 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                            >
+                              Certificate
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* B4. LEGAL TITLE (Admin-Controlled, Points Format) */}
+              {viewingProject.legalTitle?.visible && (
+                <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-md space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                      Legal Title
+                    </h3>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        viewingProject.legalTitle.verified
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                      }`}
+                    >
+                      {viewingProject.legalTitle.verified ? 'Verified' : 'Under Verification'}
+                    </span>
+                  </div>
+                  <ul className="space-y-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
+                    <li className="flex items-start gap-2.5">
+                      <span className="w-2 h-2 rounded-full bg-[#15803D] mt-1.5 shrink-0" />
+                      <span>
+                        <strong className="text-slate-900 dark:text-white">
+                          {viewingProject.legalTitle.title}
+                        </strong>
+                        {viewingProject.legalTitle.description ? ` — ${viewingProject.legalTitle.description}` : ''}
+                      </span>
+                    </li>
+                    {viewingProject.legalTitle.verificationDetails && (
+                      <li className="flex items-start gap-2.5">
+                        <span className="w-2 h-2 rounded-full bg-[#CA8A04] mt-1.5 shrink-0" />
+                        <span>{viewingProject.legalTitle.verificationDetails}</span>
+                      </li>
+                    )}
+                  </ul>
+                  {viewingProject.legalTitle.documentUrl && (
+                    <a
+                      href={viewingProject.legalTitle.documentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-600/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>View Legal Document</span>
+                    </a>
+                  )}
+                </div>
+              )}
 
               {/* C. MASTER BROCHURE DOWNLOAD CARD */}
               <div className="bg-gradient-to-br from-[#081B10] via-[#0B2516] to-[#04140B] rounded-3xl p-5 border border-[#CA8A04]/40 shadow-xl text-white space-y-4">
@@ -579,155 +732,283 @@ export const PublicProjects: React.FC<PublicProjectsProps> = ({
               </div>
 
               {/* D. TOWNSHIP INFRASTRUCTURE CARD */}
-              <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-md space-y-4">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                    Township Infrastructure
-                  </h3>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold">
-                    FULLY COMPLETED
-                  </span>
-                </div>
+              {(viewingProject.infrastructure === undefined ||
+                viewingProject.infrastructure.some((f) => f.enabled)) && (
+                <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-md space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                      Township Infrastructure
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold">
+                      {viewingProject.infrastructure
+                        ? `${viewingProject.infrastructure.filter((f) => f.enabled).length} FACILITIES`
+                        : 'FULLY COMPLETED'}
+                    </span>
+                  </div>
 
-                <div className="space-y-3">
-                  {[
-                    {
-                      title: '40ft & 30ft Heavy Tar Roads',
-                      desc: 'Storm water drain culverts, kerb stones & LED lighting.',
-                      icon: Car,
-                    },
-                    {
-                      title: 'Tested Potable Sweet Water (28ft)',
-                      desc: 'TDS tested underground sweet drinking water vein.',
-                      icon: Droplet,
-                    },
-                    {
-                      title: '10,000 Sq.Ft OSR Park & Track',
-                      desc: 'Children play lawn, reflexology pathway & native grove.',
-                      icon: TreePine,
-                    },
-                    {
-                      title: '100% Clear Title & Immediate Patta',
-                      desc: '30 year lawyer encumbrance verified, instant registration.',
-                      icon: ShieldCheck,
-                    },
-                  ].map((infra, idx) => {
-                    const Icon = infra.icon;
-                    return (
-                      <div
-                        key={idx}
-                        className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#112F1C]/70 border border-slate-100 dark:border-[#1E5D32]/50 flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-[#113B24] border border-[#1E5D32] text-emerald-400 flex items-center justify-center shrink-0">
-                            <Icon className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
-                              {infra.title}
-                            </h4>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                              {infra.desc}
-                            </p>
-                          </div>
-                        </div>
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                      </div>
-                    );
-                  })}
+                  <div className="space-y-3">
+                    {viewingProject.infrastructure
+                      ? viewingProject.infrastructure
+                          .filter((f) => f.enabled)
+                          .sort((a, b) => a.order - b.order)
+                          .map((infra) => (
+                            <div
+                              key={infra.id}
+                              className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#112F1C]/70 border border-slate-100 dark:border-[#1E5D32]/50 flex items-center justify-between gap-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-[#113B24] border border-[#1E5D32] text-emerald-400 flex items-center justify-center shrink-0">
+                                  <CheckCircle2 className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                                    {infra.name}
+                                  </h4>
+                                  {infra.description && (
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {infra.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                            </div>
+                          ))
+                      : [
+                          {
+                            title: '40ft & 30ft Heavy Tar Roads',
+                            desc: 'Storm water drain culverts, kerb stones & LED lighting.',
+                            icon: Car,
+                          },
+                          {
+                            title: 'Tested Potable Sweet Water (28ft)',
+                            desc: 'TDS tested underground sweet drinking water vein.',
+                            icon: Droplet,
+                          },
+                          {
+                            title: '10,000 Sq.Ft OSR Park & Track',
+                            desc: 'Children play lawn, reflexology pathway & native grove.',
+                            icon: TreePine,
+                          },
+                          {
+                            title: '100% Clear Title & Immediate Patta',
+                            desc: '30 year lawyer encumbrance verified, instant registration.',
+                            icon: ShieldCheck,
+                          },
+                        ].map((infra, idx) => {
+                          const Icon = infra.icon;
+                          return (
+                            <div
+                              key={idx}
+                              className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#112F1C]/70 border border-slate-100 dark:border-[#1E5D32]/50 flex items-center justify-between gap-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-[#113B24] border border-[#1E5D32] text-emerald-400 flex items-center justify-center shrink-0">
+                                  <Icon className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                                    {infra.title}
+                                  </h4>
+                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    {infra.desc}
+                                  </p>
+                                </div>
+                              </div>
+                              <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                            </div>
+                          );
+                        })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* E. NEARBY LANDMARKS & CONNECTIVITY */}
-              <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-md space-y-4">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                    Nearby Landmarks
-                  </h3>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold">
-                    KEY HUBS
-                  </span>
+              {(viewingProject.nearbyPlaces === undefined ||
+                viewingProject.nearbyPlaces.some((p) => p.visible)) && (
+                <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-md space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                      Nearby Landmarks
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold">
+                      KEY HUBS
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {viewingProject.nearbyPlaces
+                      ? viewingProject.nearbyPlaces
+                          .filter((p) => p.visible)
+                          .sort((a, b) => a.order - b.order)
+                          .map((place) => (
+                            <div
+                              key={place.id}
+                              className="p-3 rounded-2xl bg-slate-50 dark:bg-[#112F1C]/70 border border-slate-100 dark:border-[#1E5D32]/50 flex items-center justify-between gap-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 dark:bg-[#113B24] text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                  <MapPin className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <h4 className="text-xs font-black text-slate-900 dark:text-white">
+                                    {place.name}
+                                  </h4>
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                                    {place.category}
+                                    {place.description ? ` · ${place.description}` : ''}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-black shrink-0 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                {place.distance}
+                              </span>
+                            </div>
+                          ))
+                      : [
+                          {
+                            name: 'NH-45A / ECR Coastal Corridor',
+                            sub: 'Rapid seamless access to arterial highway connecting Puducherry & Chidambaram',
+                            dist: '400 m (1 min)',
+                            isAmber: false,
+                            icon: Navigation,
+                          },
+                          {
+                            name: 'Cuddalore Port Junction Rwy Station',
+                            sub: 'Main Southern Railway junction with express trains to Chennai & Tiruchirappalli',
+                            dist: '4.2 km (8 mins)',
+                            isAmber: true,
+                            icon: Train,
+                          },
+                          {
+                            name: 'Airport Connectivity',
+                            sub: 'Pondicherry Airport = 24 km (35 mins) & Chennai International Airport = 180 km',
+                            dist: '24 km (35 mins)',
+                            isAmber: false,
+                            icon: Plane,
+                          },
+                          {
+                            name: 'Schools & Premier Colleges',
+                            sub: "St. Joseph's Hr. Sec., Krishnasamy Memorial School & Periyar Arts College (2.5 km)",
+                            dist: '1.0 km (2 mins)',
+                            isAmber: false,
+                            icon: GraduationCap,
+                          },
+                          {
+                            name: 'Hospitals & Healthcare',
+                            sub: 'Government General Hospital, Krishna Hospital & 24x7 Multi-Specialty Clinics',
+                            dist: '3.5 km (6 mins)',
+                            isAmber: false,
+                            icon: HeartPulse,
+                          },
+                          {
+                            name: 'Shopping Malls & Commercial Hub',
+                            sub: 'AR Shopping Mall, Imperial Road Daily Produce Market & Banking Hubs',
+                            dist: '3.8 km (7 mins)',
+                            isAmber: true,
+                            icon: ShoppingBag,
+                          },
+                        ].map((landmark, idx) => {
+                          const Icon = landmark.icon;
+                          return (
+                            <div
+                              key={idx}
+                              className="p-3 rounded-2xl bg-slate-50 dark:bg-[#112F1C]/70 border border-slate-100 dark:border-[#1E5D32]/50 flex items-center justify-between gap-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 dark:bg-[#113B24] text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                  <Icon className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <h4 className="text-xs font-black text-slate-900 dark:text-white">
+                                    {landmark.name}
+                                  </h4>
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                                    {landmark.sub}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-[10px] font-black shrink-0 ${
+                                  landmark.isAmber
+                                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                }`}
+                              >
+                                {landmark.dist}
+                              </span>
+                            </div>
+                          );
+                        })}
+                  </div>
                 </div>
+              )}
 
-                <div className="space-y-2.5">
-                  {[
-                    {
-                      name: 'NH-45A / ECR Coastal Corridor',
-                      sub: 'Rapid seamless access to arterial highway connecting Puducherry & Chidambaram',
-                      dist: '400 m (1 min)',
-                      isAmber: false,
-                      icon: Navigation,
-                    },
-                    {
-                      name: 'Cuddalore Port Junction Rwy Station',
-                      sub: 'Main Southern Railway junction with express trains to Chennai & Tiruchirappalli',
-                      dist: '4.2 km (8 mins)',
-                      isAmber: true,
-                      icon: Train,
-                    },
-                    {
-                      name: 'Airport Connectivity',
-                      sub: 'Pondicherry Airport = 24 km (35 mins) & Chennai International Airport = 180 km',
-                      dist: '24 km (35 mins)',
-                      isAmber: false,
-                      icon: Plane,
-                    },
-                    {
-                      name: 'Schools & Premier Colleges',
-                      sub: "St. Joseph's Hr. Sec., Krishnasamy Memorial School & Periyar Arts College (2.5 km)",
-                      dist: '1.0 km (2 mins)',
-                      isAmber: false,
-                      icon: GraduationCap,
-                    },
-                    {
-                      name: 'Hospitals & Healthcare',
-                      sub: 'Government General Hospital, Krishna Hospital & 24x7 Multi-Specialty Clinics',
-                      dist: '3.5 km (6 mins)',
-                      isAmber: false,
-                      icon: HeartPulse,
-                    },
-                    {
-                      name: 'Shopping Malls & Commercial Hub',
-                      sub: 'AR Shopping Mall, Imperial Road Daily Produce Market & Banking Hubs',
-                      dist: '3.8 km (7 mins)',
-                      isAmber: true,
-                      icon: ShoppingBag,
-                    },
-                  ].map((landmark, idx) => {
-                    const Icon = landmark.icon;
-                    return (
-                      <div
-                        key={idx}
-                        className="p-3 rounded-2xl bg-slate-50 dark:bg-[#112F1C]/70 border border-slate-100 dark:border-[#1E5D32]/50 flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 dark:bg-[#113B24] text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                            <Icon className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-black text-slate-900 dark:text-white">
-                              {landmark.name}
-                            </h4>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
-                              {landmark.sub}
-                            </p>
-                          </div>
-                        </div>
-
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-black shrink-0 ${
-                            landmark.isAmber
-                              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                              : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                          }`}
+              {/* E2. PROJECT GALLERY (Admin-Controlled) */}
+              {viewingProject.gallery && viewingProject.gallery.filter((g) => g.visible).length > 0 && (
+                <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-md space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                      Project Gallery
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-bold">
+                      {viewingProject.gallery.filter((g) => g.visible).length} Photos
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {viewingProject.gallery
+                      .filter((g) => g.visible)
+                      .sort((a, b) => a.order - b.order)
+                      .map((img) => (
+                        <div
+                          key={img.id}
+                          className="rounded-2xl overflow-hidden border border-slate-200 dark:border-[#1E5D32]/60 bg-slate-50 dark:bg-[#112F1C]/70"
                         >
-                          {landmark.dist}
-                        </span>
-                      </div>
-                    );
-                  })}
+                          <img
+                            src={img.url}
+                            alt={img.caption || viewingProject.name}
+                            className="w-full h-32 sm:h-40 object-cover"
+                          />
+                          {img.caption && (
+                            <p className="p-2 text-[11px] font-medium text-slate-700 dark:text-slate-300 truncate">
+                              {img.caption}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* E3. PROJECT VIDEO */}
+              {viewingProject.videoUrl && (
+                <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-md space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <Video className="w-5 h-5 text-[#15803D]" />
+                      <span>Project &amp; Site Tour Video</span>
+                    </h3>
+                  </div>
+                  <div className="rounded-2xl overflow-hidden bg-black border border-slate-200 dark:border-[#1E5D32]">
+                    {viewingProject.videoUrl.includes('youtube.com') || viewingProject.videoUrl.includes('youtu.be') ? (
+                      <iframe
+                        src={viewingProject.videoUrl.replace('watch?v=', 'embed/')}
+                        title="Project Video"
+                        className="w-full aspect-video"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <video
+                        src={viewingProject.videoUrl}
+                        controls
+                        className="w-full aspect-video object-cover"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* F. PRE-APPROVED BANK LOANS CARD */}
               <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-md space-y-4">

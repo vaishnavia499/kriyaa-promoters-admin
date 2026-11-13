@@ -31,37 +31,15 @@ export const TopHeaderBar: React.FC = () => {
     logout,
   } = useApp();
 
-  // 1. THEME MODE STATE & PERSISTENCE
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    try {
-      const saved = localStorage.getItem('kriyaa_theme');
-      if (saved === 'dark' || saved === 'light') return saved;
-      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light';
-    } catch {
-      return 'light';
-    }
-  });
-
+  // 1. FORCE LIGHT MODE (Dark mode removed)
   useEffect(() => {
     try {
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-      localStorage.setItem('kriyaa_theme', theme);
+      document.documentElement.classList.remove('dark');
+      localStorage.removeItem('kriyaa_theme');
     } catch (e) {
-      console.error('Failed to persist theme:', e);
+      console.error('Failed to enforce light mode:', e);
     }
-  }, [theme]);
-
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    showToast(`Switched to ${nextTheme === 'dark' ? 'Dark' : 'Light'} Mode`, 'info');
-  };
+  }, []);
 
   // 2. DROPDOWN POPUP STATES
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
@@ -103,6 +81,12 @@ export const TopHeaderBar: React.FC = () => {
     };
   };
 
+  // Only fully completed projects are shown in the header project switcher
+  const completedProjects = useMemo(
+    () => projects.filter((p) => !p.isIncomplete),
+    [projects]
+  );
+
   return (
     <header ref={headerRef} className="sticky top-0 z-40 w-full shadow-md text-white select-none">
       {/* ─────────────────────────────────────────────────────────────
@@ -111,11 +95,11 @@ export const TopHeaderBar: React.FC = () => {
       <div className="w-full bg-[#113B24] border-b border-[#1E5D32]/60 px-3 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between gap-2">
         {/* Top Left: Rectangular Brand Logo badge + Title + Italic Gold Tagline */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-[#EAB308]/60 p-1 flex items-center justify-center shrink-0 shadow-xs relative overflow-hidden">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white border-2 border-[#EAB308]/80 p-0.5 flex items-center justify-center shrink-0 shadow-xs relative overflow-hidden">
             <img
               src={settings.logoUrl || '/kriyaa-logo.jpg'}
               alt="Kriyaa Promoters"
-              className="w-full h-full object-contain"
+              className="w-full h-full object-cover rounded-full"
             />
           </div>
           <div className="min-w-0 flex flex-col justify-center">
@@ -128,21 +112,8 @@ export const TopHeaderBar: React.FC = () => {
           </div>
         </div>
 
-        {/* Top Right Action Group: Theme + Deep Forest Green & Gold Action Button ("+ ▾") */}
+        {/* Top Right Action Group: Deep Forest Green & Gold Action Button ("+ ▾") */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Theme Toggle Button */}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl border border-[#1E5D32] bg-[#0B2516] flex items-center justify-center text-[#EAB308] hover:bg-[#164329] transition cursor-pointer active:scale-95 shadow-xs"
-          >
-            {theme === 'dark' ? (
-              <Sun className="w-3.5 h-3.5 text-[#EAB308]" />
-            ) : (
-              <Moon className="w-3.5 h-3.5 text-white/90 stroke-[2]" />
-            )}
-          </button>
 
 
           {/* Deep Forest Green and Gold Bordered Action Button ("+ ▾") */}
@@ -348,7 +319,7 @@ export const TopHeaderBar: React.FC = () => {
                     </span>
                   </div>
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                    {projects.length} Layouts
+                    {completedProjects.length} Layouts
                   </span>
                 </div>
 
@@ -403,7 +374,7 @@ export const TopHeaderBar: React.FC = () => {
                   <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
 
                   {/* Individual Layouts */}
-                  {projects.map((proj) => {
+                  {completedProjects.map((proj) => {
                     const isSelected = selectedProjectId === proj.id;
                     const stats = getProjectPlotStats(proj.id);
 

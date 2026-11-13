@@ -82,40 +82,6 @@ export const HeaderActionCluster: React.FC<HeaderActionClusterProps> = ({ varian
 
   return (
     <div ref={clusterRef} className="relative flex items-center gap-1.5 sm:gap-2">
-      {/* ─────────────────────────────────────────────────────────────
-          1. THEME MODE TOGGLE (Sun / Moon)
-          ───────────────────────────────────────────────────────────── */}
-      <button
-        type="button"
-        onClick={toggleTheme}
-        aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        className="w-9 h-9 rounded-lg flex items-center justify-center border transition-all duration-200 shrink-0 cursor-pointer shadow-xs active:scale-95 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-amber-500 dark:text-amber-400"
-      >
-        <AnimatePresence mode="wait" initial={false}>
-          {theme === 'dark' ? (
-            <motion.div
-              key="sun"
-              initial={{ rotate: -90, scale: 0.5, opacity: 0 }}
-              animate={{ rotate: 0, scale: 1, opacity: 1 }}
-              exit={{ rotate: 90, scale: 0.5, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              <Sun className="w-4 h-4 text-amber-400 fill-amber-400/20" />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="moon"
-              initial={{ rotate: 90, scale: 0.5, opacity: 0 }}
-              animate={{ rotate: 0, scale: 1, opacity: 1 }}
-              exit={{ rotate: -90, scale: 0.5, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              <Moon className="w-4 h-4 text-slate-700 dark:text-slate-100 fill-slate-200/20" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </button>
 
       {/* ─────────────────────────────────────────────────────────────
           2. PROFILE AVATAR & DROPDOWN MENU

@@ -17,6 +17,8 @@ export function mapProjectRow(row: any): Project {
     reraNumber: row.rera_number || undefined,
     masterPlanImage: isGolden ? '/golden-city-layout.jpg' : (row.master_plan_image || row.layout_image_url || '/golden-city-layout.jpg'),
     layoutImageUrl: isGolden ? '/golden-city-layout.jpg' : (row.layout_image_url || row.master_plan_image || undefined),
+    bannerImage: row.banner_image || undefined,
+    videoUrl: row.video_url || undefined,
     layoutPdfUrl: row.layout_pdf_url || undefined,
     layoutVersion: row.layout_version || 1,
     description: row.description || '',
@@ -29,6 +31,12 @@ export function mapProjectRow(row: any): Project {
     availablePlots: row.available_plots || undefined,
     reservedPlots: row.reserved_plots || undefined,
     soldPlots: row.sold_plots || undefined,
+    approvals: Array.isArray(row.approvals) ? row.approvals : undefined,
+    legalTitle: row.legal_title || undefined,
+    infrastructure: Array.isArray(row.infrastructure) ? row.infrastructure : undefined,
+    nearbyPlaces: Array.isArray(row.nearby_places) ? row.nearby_places : undefined,
+    gallery: Array.isArray(row.gallery) ? row.gallery : undefined,
+    featuredSection: row.featured_section || undefined,
     updatedAt: row.updated_at || row.created_at,
     createdAt: row.created_at,
   };
@@ -98,20 +106,25 @@ export async function getSupabaseProjects(): Promise<Project[]> {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.warn('[SupabaseService] Error loading projects:', error.message);
-      return INITIAL_PROJECTS;
+    if (!error && data && data.length > 0) {
+      return data.map(mapProjectRow);
     }
-
-    if (!data || data.length === 0) {
-      return INITIAL_PROJECTS;
-    }
-
-    return data.map(mapProjectRow);
   } catch (err: any) {
-    console.warn('[SupabaseService] Fallback to initial projects:', err?.message);
-    return INITIAL_PROJECTS;
+    console.warn('[SupabaseService] Fallback to local projects:', err?.message);
   }
+
+  // Reconcile with localStorage projects if Supabase is offline/empty
+  try {
+    const saved = localStorage.getItem('kriyaa_projects_v5');
+    if (saved) {
+      const parsed: Project[] = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {}
+
+  return INITIAL_PROJECTS;
 }
 
 /**
@@ -269,6 +282,104 @@ export async function uploadLayoutImageToSupabase(
 }
 
 /**
+ * Upload an image or document for a project to Supabase Storage (with Data URL fallback)
+ */
+export async function uploadProjectAssetToSupabase(
+  projectId: string,
+  file: File,
+  folder: 'cover' | 'approvals' | 'legal' | 'gallery' | 'featured' | 'video' = 'gallery'
+): Promise<{ url: string; fileName: string }> {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filePath = `public/${projectId}/${folder}/${Date.now()}_${safeName}`;
+
+  try {
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('layout-files')
+      .upload(filePath, file, { upsert: true, contentType: file.type || undefined });
+
+    if (!uploadError && uploadData) {
+      const { data: pubData } = supabase.storage.from('layout-files').getPublicUrl(filePath);
+      if (pubData?.publicUrl) {
+        return { url: pubData.publicUrl, fileName: file.name };
+      }
+    }
+  } catch (err) {
+    console.warn('[SupabaseService] Storage upload fallback to Data URL:', err);
+  }
+
+  // Fallback to base64 Data URL so offline/unconfigured buckets still work seamlessly
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+
+  return { url: dataUrl, fileName: file.name };
+}
+
+/**
+ * Persist project details to Supabase (gracefully ignores missing optional columns)
+ */
+export async function updateProjectDetailsInSupabase(
+  project: Project
+): Promise<{ success: boolean; error?: string }> {
+  const basePayload: Record<string, any> = {
+    id: project.id,
+    name: project.name,
+    location: project.location,
+    district: project.district,
+    dtcp_number: project.dtcpNumber,
+    rera_number: project.reraNumber || null,
+    description: project.description,
+    status: project.status,
+    is_published: Boolean(project.isPublished),
+    total_area_extent: project.totalAreaExtent || null,
+    master_plan_image: project.masterPlanImage,
+    updated_at: new Date().toISOString(),
+  };
+
+  const fullPayload: Record<string, any> = {
+    ...basePayload,
+    layout_image_url: project.layoutImageUrl || project.masterPlanImage,
+    launch_year: project.launchYear || new Date().getFullYear(),
+    total_plots: project.totalPlots ?? null,
+    approvals: project.approvals ?? null,
+    legal_title: project.legalTitle ?? null,
+    infrastructure: project.infrastructure ?? null,
+    nearby_places: project.nearbyPlaces ?? null,
+    gallery: project.gallery ?? null,
+    featured_section: project.featuredSection ?? null,
+    banner_image: project.bannerImage ?? null,
+    video_url: project.videoUrl ?? null,
+  };
+
+  try {
+    const { error: fullErr } = await supabase
+      .from('projects')
+      .upsert(fullPayload, { onConflict: 'id' });
+
+    if (!fullErr) {
+      return { success: true };
+    }
+
+    console.warn('[SupabaseService] Full project upsert fallback to base columns:', fullErr.message);
+    const { error: baseErr } = await supabase
+      .from('projects')
+      .upsert(basePayload, { onConflict: 'id' });
+
+    if (baseErr) {
+      console.warn('[SupabaseService] Base project upsert note:', baseErr.message);
+      return { success: false, error: baseErr.message };
+    }
+  } catch (err: any) {
+    console.warn('[SupabaseService] Project upsert note:', err);
+    return { success: false, error: err?.message };
+  }
+  return { success: true };
+}
+
+/**
  * Update project publication status in Supabase
  */
 export async function setProjectPublicationInSupabase(
@@ -362,4 +473,22 @@ export async function updatePropertyStatusInSupabase(
     return { success: false, error: err?.message };
   }
 }
+
+/**
+ * Delete a project from Supabase
+ */
+export async function deleteProjectInSupabase(projectId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('projects').delete().eq('id', projectId);
+    if (error) {
+      console.warn('[SupabaseService] Project delete note:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('[SupabaseService] Project delete note:', err?.message);
+    return false;
+  }
+}
+
 

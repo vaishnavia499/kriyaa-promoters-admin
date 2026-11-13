@@ -46,6 +46,7 @@ export const Properties: React.FC = () => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   // Search & Filter state
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeStatusTab, setActiveStatusTab] = useState<'All' | 'Sold' | 'Reserved' | 'Visited' | 'Available'>('All');
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
@@ -61,11 +62,17 @@ export const Properties: React.FC = () => {
     });
   };
 
+  // Project-scoped properties for status dropdown counts
+  const projectScopedProperties = useMemo(() => {
+    if (filterProjectId === 'all') return properties;
+    return properties.filter((p) => p.projectId === filterProjectId);
+  }, [properties, filterProjectId]);
+
   // Status Counts
-  const soldCount = properties.filter((p) => p.status === 'Sold').length;
-  const resCount = properties.filter((p) => p.status === 'Reserved').length;
-  const availCount = properties.filter((p) => p.status === 'Available').length;
-  const visitedLeadsCount = properties.filter((p) => {
+  const soldCount = projectScopedProperties.filter((p) => p.status === 'Sold').length;
+  const resCount = projectScopedProperties.filter((p) => p.status === 'Reserved').length;
+  const availCount = projectScopedProperties.filter((p) => p.status === 'Available').length;
+  const visitedLeadsCount = projectScopedProperties.filter((p) => {
     const lead = getLinkedLead(p);
     return lead !== undefined;
   }).length;
@@ -295,32 +302,69 @@ export const Properties: React.FC = () => {
   return (
     <div className="w-full max-w-full space-y-6 select-none">
       {/* ─────────────────────────────────────────────────────────────
-          1. HEADER & REGISTER NEW PROJECT CTA
+          1. SEARCH & TWO DROPDOWN FILTERS (Project + Status in same row)
           ───────────────────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="text-center sm:text-left">
-          <div className="flex items-center justify-center sm:justify-start gap-2">
-            <span className="p-2 rounded-xl bg-[#15803D]/10 text-[#15803D] dark:text-emerald-400">
-              <Building2 className="w-5 h-5" />
-            </span>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-              Properties &amp; Plot Inventory
-            </h1>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Master inventory records, status management, buyer assignments, and lead inquiries.
-          </p>
-        </div>
-
-        {/* Register New Plot Button (Centered similar to Project) */}
-        <button
-          type="button"
-          onClick={() => openAddPropertyModal(filterProjectId !== 'all' ? filterProjectId : undefined)}
-          className="min-h-[42px] px-4 py-2 bg-[#15803D] hover:bg-[#166534] active:scale-[0.98] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm border border-[#CA8A04]/40 hover:border-[#EAB308] transition-all cursor-pointer shrink-0 whitespace-nowrap self-center sm:self-auto"
+      <div className="bg-white dark:bg-[#0B2516] rounded-2xl border border-slate-200 dark:border-[#1E5D32] p-4 shadow-sm space-y-3">
+        {/* First: Search Box + Search Button */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSearchQuery(searchInput);
+          }}
+          className="flex items-center gap-2 w-full"
         >
-          <Plus className="w-4 h-4 text-[#EAB308]" />
-          <span>Register New Plot</span>
-        </button>
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search plot #, buyer, area..."
+              value={searchInput}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchInput(val);
+                if (!val.trim()) setSearchQuery('');
+              }}
+              className="w-full h-10 text-xs sm:text-sm pl-10 pr-3.5 bg-slate-50 dark:bg-[#112F1C] border border-slate-200 dark:border-[#1E5D32] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <button
+            type="submit"
+            className="h-10 px-4 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white text-xs font-bold inline-flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>Search</span>
+          </button>
+        </form>
+
+        {/* Second: Two Dropdown Menus in Same Row (Projects + Status) */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <select
+            aria-label="Filter by project"
+            value={filterProjectId}
+            onChange={(e) => setFilterProjectId(e.target.value)}
+            className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#112F1C] border border-slate-200 dark:border-[#1E5D32] text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+          >
+            <option value="all">All Projects ({projects.length})</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            aria-label="Filter by plot status"
+            value={activeStatusTab}
+            onChange={(e) => setActiveStatusTab(e.target.value as any)}
+            className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-[#112F1C] border border-slate-200 dark:border-[#1E5D32] text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+          >
+            <option value="All">All Status ({projectScopedProperties.length})</option>
+            <option value="Available">Available ({availCount})</option>
+            <option value="Reserved">Reserved / Hold ({resCount})</option>
+            <option value="Sold">Sold Out ({soldCount})</option>
+            <option value="Visited">Visited / Leads ({visitedLeadsCount})</option>
+          </select>
+        </div>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -336,12 +380,21 @@ export const Properties: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((proj) => {
-            const projPlots = properties.filter((p) => p.projectId === proj.id);
-            const pSold = projPlots.filter((p) => p.status === 'Sold').length;
-            const pRes = projPlots.filter((p) => p.status === 'Reserved').length;
-            const pAvail = projPlots.filter((p) => p.status === 'Available').length;
-            const isFilterActive = filterProjectId === proj.id;
+          {projects
+            .filter((proj) => {
+              if (filterProjectId !== 'all' && proj.id !== filterProjectId) return false;
+              const projMatchedPlots = filteredProperties.filter((p) => p.projectId === proj.id);
+              if ((activeStatusTab !== 'All' || searchQuery.trim()) && projMatchedPlots.length === 0) {
+                return false;
+              }
+              return true;
+            })
+            .map((proj) => {
+              const projPlots = filteredProperties.filter((p) => p.projectId === proj.id);
+              const pSold = projPlots.filter((p) => p.status === 'Sold').length;
+              const pRes = projPlots.filter((p) => p.status === 'Reserved').length;
+              const pAvail = projPlots.filter((p) => p.status === 'Available').length;
+              const isFilterActive = filterProjectId === proj.id;
 
             return (
               <div
@@ -419,79 +472,13 @@ export const Properties: React.FC = () => {
           3. MASTER INVENTORY & ACTIVITY BREAKDOWN TABLE
           ───────────────────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-[#0B2516] rounded-3xl border border-slate-200 dark:border-[#1E5D32] p-5 sm:p-6 shadow-sm space-y-4">
-        {/* Filter Controls Row */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-slate-100 dark:border-[#1E5D32]/60">
-          {/* Status Tabs: All, Sold Out, Reserved / Hold, Visited / Inquired, Available */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar flex-nowrap text-xs">
-            {[
-              { id: 'All', label: 'All Plots', count: properties.length },
-              { id: 'Sold', label: 'Sold Out', count: soldCount, color: 'text-rose-600' },
-              { id: 'Reserved', label: 'Reserved / Hold', count: resCount, color: 'text-amber-600' },
-              { id: 'Visited', label: 'Visited / Inquired Leads', count: visitedLeadsCount, color: 'text-purple-600' },
-              { id: 'Available', label: 'Available', count: availCount, color: 'text-emerald-600' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveStatusTab(tab.id as any)}
-                className={`min-h-[38px] px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer flex items-center gap-1.5 ${
-                  activeStatusTab === tab.id
-                    ? 'bg-[#15803D] text-white shadow-sm'
-                    : 'bg-slate-100 dark:bg-[#112F1C] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-[#164329]'
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                    activeStatusTab === tab.id
-                      ? 'bg-white/20 text-white'
-                      : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {/* Search & Project Filter on Right */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            {/* Project Filter Select */}
-            <select
-              value={filterProjectId}
-              onChange={(e) => setFilterProjectId(e.target.value)}
-              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#112F1C] border border-slate-200 dark:border-[#1E5D32] text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="all">All Projects ({projects.length})</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-
-            {/* Search Input */}
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search plot #, buyer, area..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 dark:bg-[#112F1C] border border-slate-200 dark:border-[#1E5D32] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            {/* Quick Register Plot Button */}
-            <button
-              type="button"
-              onClick={() => openAddPropertyModal(filterProjectId !== 'all' ? filterProjectId : undefined)}
-              className="min-h-[38px] px-3.5 py-1.5 bg-[#15803D] hover:bg-[#166534] active:scale-[0.98] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-xs border border-[#CA8A04]/40 hover:border-[#EAB308] transition-all cursor-pointer shrink-0 whitespace-nowrap self-stretch sm:self-auto"
-            >
-              <Plus className="w-3.5 h-3.5 text-[#EAB308]" />
-              <span>Register Plot</span>
-            </button>
-          </div>
+        <div className="pb-3 border-b border-slate-100 dark:border-[#1E5D32]/60">
+          <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+            Master Plot Inventory ({filteredProperties.length})
+          </h2>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Click any plot to inspect specs, buyer contact, or update status
+          </p>
         </div>
 
         {/* Master Inventory Table */}

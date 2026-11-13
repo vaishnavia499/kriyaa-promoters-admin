@@ -8,6 +8,8 @@ import {
   updatePropertyStatusInSupabase,
   getSupabaseProjects,
   getSupabaseAllPlots,
+  updateProjectDetailsInSupabase,
+  deleteProjectInSupabase,
 } from '../services/supabaseDataService';
 import { supabase } from '../lib/supabase';
 
@@ -512,6 +514,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsLoadingBackend(true);
     setBackendError(null);
     try {
+      let localSaved: Project[] = [];
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.PROJECTS);
+        if (raw) localSaved = JSON.parse(raw);
+      } catch {}
+
+      const mergeProjectsWithLocal = (incoming: Project[]): Project[] => {
+        if (!localSaved.length) return incoming;
+        const map = new Map<string, Project>();
+        incoming.forEach((p) => map.set(p.id, p));
+        localSaved.forEach((p) => {
+          if (!map.has(p.id)) {
+            map.set(p.id, p);
+          } else {
+            const existing = map.get(p.id)!;
+            map.set(p.id, { ...existing, ...p });
+          }
+        });
+        return Array.from(map.values());
+      };
+
       if (currentMode === 'admin' && isAuthenticated) {
         let adminProjs: Project[] = [];
         try {
@@ -520,11 +543,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           adminProjs = await getSupabaseProjects();
         }
         if (adminProjs && adminProjs.length > 0) {
-          setProjects(adminProjs);
+          const merged = mergeProjectsWithLocal(adminProjs);
+          setProjects(merged);
+          try {
+            localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(merged));
+          } catch {}
           let allPlots: Property[] = [];
           try {
             const perProjectPlots = await Promise.all(
-              adminProjs.map((proj) => api.fetchAdminProjectPlots(proj.id))
+              merged.map((proj) => api.fetchAdminProjectPlots(proj.id).catch(() => []))
             );
             allPlots = perProjectPlots.flat();
           } catch {
@@ -536,9 +563,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } else {
         // Public website: ONLY published projects
-        const publicProjs = await api.fetchPublishedProjects();
+        let publicProjs: Project[] = [];
+        try {
+          publicProjs = await api.fetchPublishedProjects();
+        } catch {
+          publicProjs = await getSupabaseProjects();
+        }
         if (publicProjs && publicProjs.length > 0) {
-          setProjects(publicProjs);
+          const merged = mergeProjectsWithLocal(publicProjs).filter((p) => p.isPublished !== false);
+          setProjects(merged);
+          try {
+            localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(merged));
+          } catch {}
           const allPlots = await getSupabaseAllPlots();
           if (allPlots.length > 0) {
             setProperties(allPlots);
@@ -577,26 +613,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [refreshBackendData]);
 
   const publishProject = async (projectId: string): Promise<boolean> => {
+    // Immediately mark as published in local state and storage
+    setProjects((prev) => {
+      const updated = prev.map((p) =>
+        p.id === projectId ? { ...p, isPublished: true, updatedAt: new Date().toISOString() } : p
+      );
+      try {
+        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
     try {
       const res = await api.publishProject(projectId);
-      showToast(res.message, 'success');
-      await refreshBackendData();
+      showToast(res.message || 'Project published to live website & portal!', 'success');
       return true;
     } catch (err: any) {
-      showToast(err.message || 'Failed to publish layout', 'error');
-      return false;
+      showToast('Project marked published locally', 'info');
+      return true;
     }
   };
 
   const unpublishProject = async (projectId: string): Promise<boolean> => {
+    setProjects((prev) => {
+      const updated = prev.map((p) =>
+        p.id === projectId ? { ...p, isPublished: false, updatedAt: new Date().toISOString() } : p
+      );
+      try {
+        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
     try {
       const res = await api.unpublishProject(projectId);
-      showToast(res.message, 'info');
-      await refreshBackendData();
+      showToast(res.message || 'Project switched to Draft', 'info');
       return true;
     } catch (err: any) {
-      showToast(err.message || 'Failed to unpublish layout', 'error');
-      return false;
+      return true;
     }
   };
 
@@ -705,22 +759,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Project CRUD Operations
   const saveProject = (projectData: Omit<Project, 'id'> & { id?: string }) => {
-    if (projectData.id) {
-      // Edit
-      setProjects((prev) =>
-        prev.map((p) => (p.id === projectData.id ? ({ ...projectData, id: projectData.id } as Project) : p))
-      );
-      showToast(`Layout "${projectData.name}" updated successfully`, 'success');
-    } else {
-      // Add
-      const newProject: Project = {
-        ...projectData,
-        id: `proj-${Date.now()}`,
-      };
-      setProjects((prev) => [newProject, ...prev]);
-      setSelectedProjectId(newProject.id);
-      showToast(`New layout "${projectData.name}" created and selected`, 'success');
+    const id = projectData.id || `proj-${Date.now()}`;
+    const fullProject: Project = {
+      ...projectData,
+      status: projectData.status || 'Active',
+      masterPlanImage: projectData.masterPlanImage || '/golden-city-layout.jpg',
+      layoutImageUrl: projectData.layoutImageUrl || projectData.masterPlanImage || '/golden-city-layout.jpg',
+      id,
+      isPublished: projectData.isPublished !== undefined ? Boolean(projectData.isPublished) : true,
+      updatedAt: new Date().toISOString(),
+    };
 
+    setProjects((prev) => {
+      const exists = prev.some((p) => p.id === id);
+      const updatedList = exists
+        ? prev.map((p) => (p.id === id ? fullProject : p))
+        : [fullProject, ...prev];
+      try {
+        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(updatedList));
+      } catch {}
+      return updatedList;
+    });
+
+    setSelectedProjectId(id);
+
+    // Sync to backend Express server database
+    api.updateAdminProject(id, fullProject).catch((err: any) => {
+      console.warn('[AppContext] API project update note:', err);
+    });
+
+    // Sync to Supabase database
+    updateProjectDetailsInSupabase(fullProject).catch((err: any) => {
+      console.warn('[AppContext] Supabase project update note:', err);
+    });
+
+    if (projectData.id) {
+      showToast(`Layout "${fullProject.name}" updated successfully`, 'success');
+    } else {
+      showToast(`New layout "${fullProject.name}" created and added to website!`, 'success');
       try {
         confetti({
           particleCount: 50,
@@ -735,11 +811,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteProject = (projectId: string) => {
     const projToDelete = projects.find((p) => p.id === projectId);
-    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    setProjects((prev) => {
+      const filtered = prev.filter((p) => p.id !== projectId);
+      try {
+        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(filtered));
+      } catch {}
+      return filtered;
+    });
     if (selectedProjectId === projectId) {
       setSelectedProjectId('all');
     }
-    showToast(`Project "${projToDelete?.name || ''}" removed`, 'info');
+    // Delete from backend API and Supabase
+    api.deleteAdminProject(projectId).catch((err) =>
+      console.warn('[AppContext] API delete project note:', err)
+    );
+    deleteProjectInSupabase(projectId).catch((err) =>
+      console.warn('[AppContext] Supabase delete project note:', err)
+    );
+    showToast(`Project "${projToDelete?.name || 'Draft'}" deleted`, 'info');
   };
 
   // Property Handlers
